@@ -2,6 +2,7 @@
 Script Name: Fix openClip
 Script Version: 0.1
 Flame Version: 2023
+Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 05.01.24
 Modified date: 05.01.24

@@ -2,14 +2,15 @@
 Script Name: Clean Batchgroups
 Script Version: 0.3
 Flame Version: 2023
+Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 24.05.23
 Modified date: 11.02.25
 
 Description:
 
-Prepare batchgroups for archiving by removing everything but the
-last 3 iterations, renders or both.
+Prepare batchgroups for archiving by removing everything but
+the last 3 iterations, renders or both.
 
 Chnage Log:
 
