@@ -1,6 +1,6 @@
 """
 Script Name: Social Versions
-Script Version: 0.2
+Script Version: 0.3
 Flame Version: 2023
 Author: Kyle Obley (info@kyleobley.com)
 
@@ -12,6 +12,8 @@ Description:
     Creates social timelines based on other, selected timelines.
 
 Change Log:
+
+    v0.3: Get existing colour coding and apply it to the new sequence.
 
     v0.2: Fixed the width & height mismatch. Swapped them on some formats.
 
@@ -91,7 +93,8 @@ def create_timeline(selection, height, width, aspect_ratio_name):
             video_tracks = num_video_trks,
             audio_tracks = num_audio_trks,
             scan_mode = "P",
-            start_at = start_tc
+            start_at = start_tc,
+            colour = sequence.colour
             )
 
         # Overwrite with previous sequence
