@@ -13,8 +13,7 @@ Description:
 
 Change Log:
 
-    v0.4: Fixed the script failing in versions below 2026 due to not checking
-          the color coding added in the last version.
+    v0.4: Fixed the script failing when setting the color of the sequence.
 
     v0.3: Get existing colour coding and apply it to the new sequence.
 
@@ -99,15 +98,12 @@ def create_timeline(selection, height, width, aspect_ratio_name):
             start_at = start_tc
             )
 
+        # Set the sequence colour
+        new_sequence.colour = sequence.colour
+
         # Overwrite with previous sequence
         new_sequence.overwrite(sequence, flame.PyTime(1))
-
-        # If Flame >= 2026, set the color
-        flame_version = flame.get_version_major()
-        if flame_version >= 2026:
-            new_sequence.colour = sequence.colour
-
-
+        
         # Bring positioner to first frame and top version/layer
         new_sequence.current_time = flame.PyTime(1)
         new_sequence.primary_track = new_sequence.versions[-1].tracks[-1]
