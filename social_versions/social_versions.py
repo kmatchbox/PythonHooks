@@ -1,17 +1,20 @@
 """
 Script Name: Social Versions
-Script Version: 0.3
-Flame Version: 2023
+Script Version: 0.4
+Flame Version: 2025
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation Date: 05.02.25
-Modified Date: 13.02.25
+Modified Date: 07.08.25
 
 Description:
 
     Creates social timelines based on other, selected timelines.
 
 Change Log:
+
+    v0.4: Fixed the script failing in versions below 2026 due to not checking
+          the color coding added in the last version.
 
     v0.3: Get existing colour coding and apply it to the new sequence.
 
@@ -93,12 +96,17 @@ def create_timeline(selection, height, width, aspect_ratio_name):
             video_tracks = num_video_trks,
             audio_tracks = num_audio_trks,
             scan_mode = "P",
-            start_at = start_tc,
-            colour = sequence.colour
+            start_at = start_tc
             )
 
         # Overwrite with previous sequence
         new_sequence.overwrite(sequence, flame.PyTime(1))
+
+        # If Flame >= 2026, set the color
+        flame_version = flame.get_version_major()
+        if flame_version >= 2026:
+            new_sequence.colour = sequence.colour
+
 
         # Bring positioner to first frame and top version/layer
         new_sequence.current_time = flame.PyTime(1)
