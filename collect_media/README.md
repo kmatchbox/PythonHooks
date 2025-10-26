@@ -14,5 +14,24 @@ Someone who uses BFX.
 
 **Workaround:** Have a reference to the original clip either in the timeline or someone within a library.
 
+## Version 1.0 Changes (October 2025)
+
+**New Output Location:** `~/collect_media/{project_name}/{YYYYMMDD}/`
+
+### What Changed
+- Output moved from `/opt/Autodesk/project/` to user's home directory
+- Automatic directory creation
+- Organized by project and date
+- Fixes FileNotFoundError and permission issues
+
+### Migration
+The output location has changed. Update your rsync scripts:
+- Old: `/opt/Autodesk/project/{project}/status/collected_media.txt`
+- New: `~/collect_media/{project}/{YYYYMMDD}/collected_media.txt`
+
 ### How To Use:
 1. Main menu > Collect Media
+
+## Summary
+Fixes FileNotFoundError by moving output from `/opt/Autodesk/project/` to `~/collect_media/{project}/{YYYYMMDD}/`
+

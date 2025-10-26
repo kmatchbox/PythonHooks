@@ -1,11 +1,11 @@
 """
 Script Name: Collect Media
-Script Version: 0.9
+Script Version: 1.0
 Flame Version: 2023
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation Date: 10.08.21
-Modification Date: 14.08.24
+Modification Date: 26.10.25
 
 Description:
 
@@ -13,6 +13,11 @@ Description:
     out to a known location for archiving.
 
 Change Log:
+
+    v1.0: Changed output location to ~/collect_media/{project_name}/{YYYYMMDD}/ for easier access
+          and to avoid permission issues. Organized by project and date for better management.
+
+    v0.9.1: Fixed FileNotFoundError by ensuring the output directory exists before writing files.
 
     v0.9: Added a timestamped backup of a previoous list if found if, for whatever reason, you need to roll-back.
 
@@ -375,20 +380,28 @@ def collect_media():
     current_project = flame.project.current_project.name
     file_list = []
 
-    # Custom dumpfile location
-    # Leave empty to use the default location
-    custom_dump_location = ''
-
-    # Setup the dump the file and deal with locking
+    # Setup the dump file with date-based organization in home directory
     dump_file = "collected_media.txt"
+    
+    # Get current date for folder naming
+    t = time.time()
+    date_folder = time.strftime('%Y%m%d', time.localtime(t))
+    
+    # Build path: ~/collect_media/{project_name}/{YYYYMMDD}/
+    home_dir = os.path.expanduser('~')
+    base_dir = os.path.join(home_dir, 'collect_media')
+    project_dir = os.path.join(base_dir, current_project)
+    dated_dir = os.path.join(project_dir, date_folder)
+    dump_file_location = os.path.join(dated_dir, dump_file)
 
-    if custom_dump_location:
-        dump_file_location = os.path.join(custom_dump_location, dump_file)
-        
-    # Use the default location
-    else:
-        dump_file_location = os.path.join("/opt/Autodesk/project", current_project, "status", dump_file)
-
+    # Ensure the directory structure exists
+    if not os.path.exists(dated_dir):
+        try:
+            os.makedirs(dated_dir)
+            print ("[ Collect Media ] Created directory: %s" % dated_dir)
+        except OSError as e:
+            print ("\n\n[ Collect Media ] ERROR: Could not create directory %s: %s\n\n" % (dated_dir, str(e)))
+            return
 
     locked_dump_file_location = dump_file_location + ".lock"
 
@@ -566,7 +579,7 @@ def collect_media():
 
         # Let's give the user a pretty info message
         dialog = flame.messages.show_in_dialog(
-            title ="Collect Media (v0.9)",
+            title ="Collect Media (v1.0)",
             message = "Scraping complete.\n\nProgress and final archive command are in the console.",
             type = "info",
             buttons = ["Close"])
@@ -577,7 +590,7 @@ def collect_media():
 
 def show_message(selection):
     dialog = flame.messages.show_in_dialog(
-        title ="Collect Media (v0.9)",
+        title ="Collect Media (v1.0)",
         message = "IMPORT: Only works on the current workspace. Please select if you want to only search for uncached media or everything.\n\nProgress and final archive command are in the console.",
         type = "warning",
         buttons = ["Everything", "Uncached Only"],
