@@ -1,11 +1,11 @@
 """
 Script Name: Collect Media
-Script Version: 0.9.2
+Script Version: 1.0
 Flame Version: 2023
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation Date: 10.08.21
-Modification Date: 26.10.25
+Modification Date: 07.12.25
 
 Description:
 
@@ -13,6 +13,10 @@ Description:
     out to a known location for archiving.
 
 Change Log:
+
+    v1.0: Merged Chris' 0.9.2 but changed the logic to not include a dated sub-folder for easier backups.
+
+          Re-incorperated the ability for a custom save location.
 
     v0.9.2: Changed output location to ~/collect_media/{project_name}/{YYYYMMDD}/ for easier access
             and to avoid permission issues. Organized by project and date for better management.
@@ -170,17 +174,6 @@ def build_list_batchgroups(selection):
                     for sequence in reel.sequences:
                         if sequence:
                             sequences.append(sequence)
-
-        # Need to figure out how to go through every iteration's reels and find clips & sequences
-
-        '''
-        for iteration in batchgroup.batch_iterations:
-            print (iteration.reels)
-            for reel in iteration.reels:
-                print (reel.name)
-                for clip in reel.clips:
-                    print (clip.name)
-        '''
 
 def build_list_lose_clips(selection):
     global clips
@@ -379,33 +372,35 @@ def collect_media():
     current_project = flame.project.current_project.name
     file_list = []
 
-    # Setup the dump file with date-based organization in home directory
+    # Custom dumpfile location in case you want a shared location.
+    # This will still create a sub-folder for the current_project.
+    # Leave empty to use the user's home folder
+    custom_dump_location = ""
+
+    # Setup the dump the file and deal with locking
     dump_file = "collected_media.txt"
+
+    if custom_dump_location:
+        dump_file_location = os.path.join(custom_dump_location, current_project, dump_file)
+        
+    # Use the default location
+    # Build path: ~/collect_media/{project_name}/
+    else:
+        home_dir = os.path.expanduser('~')
+        project_dir = os.path.join(home_dir, "collect_media", current_project)
+        dump_file_location = os.path.join(project_dir, dump_file)
+        # Ensure the directory structure exists
+        if not os.path.exists(project_dir):
+            try:
+                os.makedirs(project_dir)
+                print ("[ Collect Media ] Created directory: %s" % project_dir)
+            except OSError as e:
+                print ("\n\n[ Collect Media ] ERROR: Could not create directory %s: %s\n\n" % (project_dir, str(e)))
+                return
+
     
-    # Get current date for folder naming
-    t = time.time()
-    date_folder = time.strftime('%Y%m%d', time.localtime(t))
-    
-    # Build path: ~/collect_media/{project_name}/{YYYYMMDD}/
-    home_dir = os.path.expanduser('~')
-    base_dir = os.path.join(home_dir, 'collect_media')
-    project_dir = os.path.join(base_dir, current_project)
-    dated_dir = os.path.join(project_dir, date_folder)
-    dump_file_location = os.path.join(dated_dir, dump_file)
-
-    # Ensure the directory structure exists
-    if not os.path.exists(dated_dir):
-        try:
-            os.makedirs(dated_dir)
-            print ("[ Collect Media ] Created directory: %s" % dated_dir)
-        except OSError as e:
-            print ("\n\n[ Collect Media ] ERROR: Could not create directory %s: %s\n\n" % (dated_dir, str(e)))
-            return
-
-    locked_dump_file_location = dump_file_location + ".lock"
-
     # Make sure someone else isn't writting to the file. If they aren't, then do our thing.
-
+    locked_dump_file_location = dump_file_location + ".lock"
     if os.path.isfile(locked_dump_file_location):
         print ("\n\n[ Collect Media ] ERROR: Someone else is writing to the list. Exiting.\n\n")
     else:
@@ -578,7 +573,7 @@ def collect_media():
 
         # Let's give the user a pretty info message
         dialog = flame.messages.show_in_dialog(
-            title ="Collect Media (v0.9.2)",
+            title ="Collect Media (v1.0)",
             message = "Scraping complete.\n\nProgress and final archive command are in the console.",
             type = "info",
             buttons = ["Close"])
@@ -589,7 +584,7 @@ def collect_media():
 
 def show_message(selection):
     dialog = flame.messages.show_in_dialog(
-        title ="Collect Media (v0.9.2)",
+        title ="Collect Media (v1.0)",
         message = "IMPORT: Only works on the current workspace. Please select if you want to only search for uncached media or everything.\n\nProgress and final archive command are in the console.",
         type = "warning",
         buttons = ["Everything", "Uncached Only"],
