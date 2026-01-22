@@ -1,17 +1,23 @@
 """
 Script Name: BLG / Neat Video Workflow
-Script Version: 0.7
+Script Version: 0.8
 Flame Version: 2023
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 11.04.23
-Modified date: 04.02.25
+Modified date: 22.01.26
 
 Description:
 
     BLG and Neat Video workflows
 
 Change Log:
+
+    v0.8: Added Neat v5/v6 support.
+
+          Creates write node hardcoded to personal workflow.
+
+          Added option to use render node or write node or both.
 
     v0.7: Removed GW dependancies.
 
@@ -29,7 +35,7 @@ Change Log:
 
     v0.4: Set destination reel based on task.
 
-    v0.3: Added nag warning for Neat if the clip name has comp
+    v0.3: Added nag warning for Neat if the clip name has clip
           or clean-up in it.
 
     v0.2: Fixed duration so it took into account start frame.
@@ -39,6 +45,9 @@ Change Log:
     v0.1: Initial Release.
 
 """
+
+make_render = False
+make_write = True
 
 def blg_workflow(selection):
     import flame
@@ -55,19 +64,19 @@ def blg_workflow(selection):
 
 
     # Figure out where to start and place everything
-    comp = selection[-1]
-    pos_x = comp.pos_x
-    pos_y = comp.pos_y
+    clip = selection[-1]
+    pos_x = clip.pos_x
+    pos_y = clip.pos_y
 
     # Create the nodes and define their positions
     mux_in = flame.batch.create_node("Mux")
-    mux_in.name = "ungraded_comp_IN"
+    mux_in.name = "ungraded_clip_IN"
     mux_in.pos_x = pos_x + 150
     mux_in.pos_y = pos_y
 
     blg = flame.batch.create_node("Pybox", blg_path)
     blg.name = "BLG"
-    blg.note = "You still need to T-click the comp"
+    blg.note = "You still need to T-click the clip"
     blg.pos_x = mux_in.pos_x + 150
     blg.pos_y = mux_in.pos_y
 
@@ -92,19 +101,19 @@ def blg_workflow(selection):
         flame.batch.create_shelf_reel("graded_renders")
 
     # Needed info for render node
-    comp_shot_num = comp.clip.versions[0].tracks[0].segments[0].shot_name
-    comp_tape_name = comp.clip.versions[0].tracks[0].segments[0].tape_name
-    comp_duration = comp.clip.versions[0].tracks[0].segments[0].source_duration.frame
+    clip_shot_num = clip.clip.versions[0].tracks[0].segments[0].shot_name
+    clip_tape_name = clip.clip.versions[0].tracks[0].segments[0].tape_name
+    clip_duration = clip.clip.versions[0].tracks[0].segments[0].source_duration.frame
 
     # Create render node
-    render_node = create_render_node(comp.clip, comp_shot_num, comp_tape_name, comp_duration, "blg")
+    render_node = create_render_node(clip.clip, clip_shot_num, clip_tape_name, clip_duration, "blg")
     render_node_object = flame.batch.get_node(render_node.get_value())
     #render_node_object = flame.batch.get_node(str(render_node).replace("'", ""))
     render_node_object.pos_x = mux_in.pos_x + 450
     render_node_object.pos_y = mux_in.pos_y
 
     # Connect everything
-    flame.batch.connect_nodes(comp, "Default", mux_in, "Default")
+    flame.batch.connect_nodes(clip, "Default", mux_in, "Default")
     flame.batch.connect_nodes(mux_in, "Default", blg, "Front")
     flame.batch.connect_nodes(blg, "Default", cm, "Front")
     flame.batch.connect_nodes(cm, "Default", render_node_object, "Front")
@@ -118,26 +127,28 @@ def neat_workflow(selection):
     cm_path = os.path.join(script_loc,setup)
 
     # Get the clip & figure out where to start and place everything
-    comp = selection[-1]
-    pos_x = comp.pos_x
-    pos_y = comp.pos_y
+    clip_object = selection[0]
+
+    clip = clip_object.clip
+    clip_name = clip.name.get_value()
+
+    pos_x = clip_object.pos_x
+    pos_y = clip_object.pos_y
 
     # Let's quickly check the name of the clip and throw a warning
-    # if someone is trying to denoise a comp / clean-up
+    # if someone is trying to denoise a clip / clean-up
     naughty = False
     keep_going = True
     naughty_words = ['_comp_', '_cleanup_', 'clean_up','clean-up']
 
-    comp_name = comp.name.get_value()
-
     for i in range(len(naughty_words)):
-        if naughty_words[i] in comp_name:
+        if naughty_words[i] in clip_name:
             naughty = True
 
     if naughty:
         dialog = flame.messages.show_in_dialog(
         title ="BLG / Neat Video Workflow",
-        message = "Hey-yo! It looks like you're wanting to denoise a comp or clean-up. Are you sure you want to do that?\n\nUnless you have a specific reason to, that's a pretty bad practice.",
+        message = "Hey-yo! It looks like you're wanting to denoise a clip or clean-up. Are you sure you want to do that?\n\nUnless you have a specific reason to, that's a pretty bad practice.",
         type = "warning",
         buttons = ["Continue"],
         cancel_button = "Cancel")
@@ -149,7 +160,7 @@ def neat_workflow(selection):
             keep_going = False
 
     # Continue with the rest of the process as either we didn't catch a naughty word
-    # or the user is happy with poor compositing practices.
+    # or the user is happy with poor clipositing practices.
     if keep_going:
 
         # Create the nodes and define their positions
@@ -158,7 +169,14 @@ def neat_workflow(selection):
         mux_in.pos_y = pos_y + 150
 
         neat = flame.batch.create_node("OpenFX")
-        neat.change_plugin("Reduce Noise v5")
+
+        # Try to load v6, fallback to v5
+        try:
+            neat.change_plugin("Reduce Noise v6")
+            print ("Neat Video v6 Loaded")
+        except:
+            neat.change_plugin("Reduce Noise v5")
+            print ("Neat Video v5 Loaded")
         neat.pos_x = mux_in.pos_x + 150
         neat.pos_y = mux_in.pos_y
 
@@ -173,22 +191,40 @@ def neat_workflow(selection):
         except:
             print ("ERROR: Can't load CM setup")
 
-        # Needed info for render node
-        comp_shot_num = comp.clip.versions[0].tracks[0].segments[0].shot_name
-        comp_tape_name = comp.clip.versions[0].tracks[0].segments[0].tape_name
-        comp_duration = comp.clip.versions[0].tracks[0].segments[0].source_duration.frame
+        # Needed info for render & write nodes
+        shot_name = clip.versions[0].tracks[0].segments[0].shot_name.get_value()
+        tape_name = clip.versions[0].tracks[0].segments[0].tape_name
+        duration = clip.versions[0].tracks[0].segments[0].source_duration.frame
 
-        # Create render node
-        render_node = create_render_node(comp.clip, comp_shot_num, comp_tape_name, comp_duration, "neat")
-        render_node_object = flame.batch.get_node(str(render_node).replace("'", ""))
-        render_node_object.pos_x = mux_in.pos_x + 450
-        render_node_object.pos_y = mux_in.pos_y
+        # Create render node if user wants
+        if make_render:
+            
+            render_node = create_render_node(clip, shot_name, tape_name, duration, "neat")
+            render_node.pos_x = mux_in.pos_x + 450
+
+            # Push render up a bit if we're also creating a write node
+            if make_write:
+                render_node.pos_y = mux_in.pos_y + 200
+            else:
+                render_node.pos_y = mux_in.pos_y
+
+        # Create write node if user wants
+        if make_write:
+            write_node = create_write_node(clip, shot_name, tape_name, duration, "neat")
+            write_node.pos_x = mux_in.pos_x + 450
+            write_node.pos_y = mux_in.pos_y
+
 
         # Connect everything
-        flame.batch.connect_nodes(comp, "Default", mux_in, "Default")
+        flame.batch.connect_nodes(clip_object, "Default", mux_in, "Default")
         flame.batch.connect_nodes(mux_in, "Default", neat, "Default")
         flame.batch.connect_nodes(neat, "Default", cm, "Front")
-        flame.batch.connect_nodes(cm, "Default", render_node_object, "Front")
+
+        if make_render:
+            flame.batch.connect_nodes(cm, "Default", render_node, "Front")
+
+        if make_write:
+            flame.batch.connect_nodes(cm, "Default", write_node, "Front")
 
 #
 # Create a render node with some known values
@@ -199,9 +235,7 @@ def create_render_node(clip, shot_num, tape_name, duration, task):
     import os
 
     clip_name = clip.name.get_value()
-    shot_num = shot_num.get_value()
-    #clip_name = str(clip.name).replace("'", "")
-    #shot_num = str(shot_num).replace("'", "")
+    #shot_num = shot_num.get_value()
      
     # Convert the bit-depth from what clip returns (int) so we can use it for the render node
     bit_depth = str(clip.bit_depth) + "-bit"
@@ -218,7 +252,7 @@ def create_render_node(clip, shot_num, tape_name, duration, task):
         render_node.name = clip_name + "_dn"
         render_node.destination = ('Batch Reels', 'pre_renders')
 
-    render_node.shot_name = str(shot_num)
+    render_node.shot_name = shot_num
     render_node.source_timecode = clip.start_time
     render_node.record_timecode = clip.start_time
     render_node.tape_name = tape_name
@@ -232,7 +266,48 @@ def create_render_node(clip, shot_num, tape_name, duration, task):
     if isinstance(clip.out_mark, flame.PyTime):
         render_node.out_mark = clip.out_mark
 
-    return render_node.name
+    #return render_node.name
+    return render_node
+
+def create_write_node(clip, shot_num, tape_name, duration, task):
+    import flame
+    import os
+
+    project = flame.project.current_project.name
+    base_path = os.path.join("/PROJEKTS", project, "shots")
+
+    clip_name = clip.name.get_value()
+
+    write_node = flame.batch.create_node("Write File")
+
+    write_node.name = clip_name + "_dn"  
+    write_node.media_path_pattern = "<shot name>/plates/full_dn/<name>."
+    write_node.destination = ('Batch Reels', 'pre_renders')
+
+    write_node.add_to_workspace = True
+    write_node.include_setup = False
+    write_node.create_clip = False
+
+    write_node.file_type = "OpenEXR"
+    write_node.compress_mode = "DWAA"
+    write_node.bit_depth = "16-bit fp"
+    write_node.frame_padding = 4
+
+    write_node.shot_name = str(shot_num) 
+    write_node.frame_rate = clip.frame_rate
+    write_node.source_timecode = clip.start_time
+    write_node.record_timecode = clip.start_time
+    write_node.tape_name = tape_name
+    write_node.range_end = flame.batch.start_frame + (duration - 1)
+          
+    # Check if we have in/out marks and they're type PyTime
+    # otherwise the script will fail
+    if isinstance(clip.in_mark, flame.PyTime):
+        write_node.in_mark = clip.in_mark
+    if isinstance(clip.out_mark, flame.PyTime):
+        write_node.out_mark = clip.out_mark
+
+    return write_node
 
 # Scope for clip only
 def scope_clip(selection):
