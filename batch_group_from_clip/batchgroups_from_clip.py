@@ -1,16 +1,22 @@
 """
 Script Name: Batchgroups From Clips
-Script Version: 1.0
+Script Version: 1.1
 Flame Version: 2025
 
 Creation date: 03.08.21
-Modified date: 02.12.25
+Modified date: 22.01.26
 
 Description:
 
     Creates a batchgroup from selected clips.
 
 Change Log:
+
+    v1.1: Updated the naming convention to align with the v000 concept. _comp_ is no longer used.
+          This will allow us to push xxx_####_v000 out to grade and then all work after can automatically
+          be updated by the colorists.
+
+          Added the ability to choose to either make a render node, write node or both.
 
     v1.0: Added a write node upon creation. This is hard-coded to my paths and folder structure.
 
@@ -41,8 +47,14 @@ Change Log:
 
 """
 
+make_render = True
+make_write = True
+
 def create_batch_group(clip, task, frame):
     import flame
+
+    global make_render
+    global make_render
 
     try:
         clip_duration = clip.versions[0].tracks[0].segments[0].source_duration.frame
@@ -76,20 +88,29 @@ def create_batch_group(clip, task, frame):
                                                     reels=schematic_reels_list,
                                                     shelf_reels=shelf_reels_list)
         
-        # Change the iteration naming if it's not a comp
-        current_iteration = batchgroup.current_iteration
-        current_iteration.name = "<batch name>_v<iteration###>"
+    # Set the current iteration to overwrite any user settings that might interfere with our naming logic.
+    current_iteration = batchgroup.current_iteration
+    current_iteration.name = "<batch name>_v<iteration###>"
 
-    # Create a render node with a few pre-set attributes.
-    render_node = create_render_node(clip, shot_num, tape_name, task)
 
-    render_node_object = flame.batch.get_node(render_node.get_value())
-    render_node_object.pos_x = 900
+    # Create a render node if the user wants
+    if make_render:
+        render_node = create_render_node(clip, shot_num, tape_name, task)
 
-    # Create a write node with the correct attributes
-    write_node_object = create_write_node(clip, shot_num, tape_name, task)
-    write_node_object.pos_x = 900
-    write_node_object.pos_y = render_node_object.pos_y - 300
+        render_node_object = flame.batch.get_node(render_node.get_value())
+        render_node_object.pos_x = 900
+
+        # If we're creating a write node, raise the render node up otherwise keep it level
+        if make_write:
+            render_node_object.pos_y = 300
+        else:
+            render_node_object.pos_y = 0
+
+    # Create a write node if the user wants
+    if make_write:
+        write_node_object = create_write_node(clip, shot_num, tape_name, task)
+        write_node_object.pos_x = 900
+        write_node_object.pos_y = 0
 
 
     loaded_plate = load_clip_in_batch(clip)
@@ -108,8 +129,10 @@ def create_batch_group(clip, task, frame):
     # Connect all nodes
     flame.batch.connect_nodes(loaded_plate_object, 'Default', mux_in, 'Default')
     flame.batch.connect_nodes(mux_in, 'Default', mux_out, 'Default')
-    flame.batch.connect_nodes(mux_out, 'Default', render_node_object, 'Default')
-    flame.batch.connect_nodes(mux_out, 'Default', write_node_object, 'Default')
+    if make_render:
+        flame.batch.connect_nodes(mux_out, 'Default', render_node_object, 'Default')
+    if make_write:
+        flame.batch.connect_nodes(mux_out, 'Default', write_node_object, 'Default')
 
 def create_render_node(clip, shot_num, tape_name, task):
     import flame
@@ -122,10 +145,7 @@ def create_render_node(clip, shot_num, tape_name, task):
 
     render_node = flame.batch.create_node("Render")
 
-    if task == "comp":
-        render_node.name = "<batch name>_comp_v<iteration###>"
-    else:
-        render_node.name = "<batch name>_v<iteration###>"
+    render_node.name = "<batch name>_v<iteration###>"
 
     render_node.shot_name = str(shot_num)
     render_node.frame_rate = clip.frame_rate
@@ -175,14 +195,8 @@ def create_write_node(clip, shot_num, tape_name, task):
     if isinstance(clip.out_mark, flame.PyTime):
         write_node.out_mark = clip.out_mark
 
-    if task == "comp":
-        write_node.name = "<batch name>_" + task + "_v<iteration###>"
-        write_node.create_clip_path = "<shot name>/comps/<batch name>_" + task
-    
-    # It's something other than a comp.
-    else:
-        write_node.name = "<batch name>_v<iteration###>"
-        write_node.create_clip_path = "<shot name>/comps/<batch name>"
+    write_node.name = "<batch name>_v<iteration###>"
+    write_node.create_clip_path = "<shot name>/comps/<batch name>"
 
     write_node.media_path = str(base_path)
     write_node.media_path_pattern = "<shot name>/comps/flame/" + task + "/<version name>/<name>."
