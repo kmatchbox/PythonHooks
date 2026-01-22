@@ -12,6 +12,8 @@ Description:
 
 Change Log:
 
+    v1.4: Replaces any spaces in input with _.
+
     v1.3: Added option to the manu for fast comp creation (comp, frame 1001) as it's the most used
           and far faster to create batchgrups for a large number of shots.
 
@@ -231,6 +233,9 @@ class batchgroup_ui(object):
 
         if other and task == "other":
             task = other
+
+        # Replace and spaces with underscores
+        task = task.replace(" ", "_")
 
         # Create the batchgroup
         create_batch_group(clip, task, start_frame)
