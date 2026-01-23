@@ -1,6 +1,6 @@
 """
 Script Name: Batchgroups From Clips
-Script Version: 1.1
+Script Version: 1.2
 Flame Version: 2025
 
 Creation date: 03.08.21
@@ -11,6 +11,9 @@ Description:
     Creates a batchgroup from selected clips.
 
 Change Log:
+
+    v1.2: Can now have multiple selections. Forgot to use self. for the clip so it kept
+          taking the first selection. Dumb mistake.
 
     v1.1: Added a pop-up to replace the various menu options. This allows the user
           to also specifiy their own task which means the the rest of the workflow works
@@ -52,10 +55,6 @@ Change Log:
 class batchgroup_ui(object):
 
     def __init__(self, selection):
-
-        global clip
-        clip = selection
-
         self.main_window(selection)
         
 
@@ -64,8 +63,9 @@ class batchgroup_ui(object):
         import os
         from functools import partial
 
-        current_clip_name = clip.name.get_value()
-        print (f"Window {selected_clip.name}")
+        self.currnet_clip = selection
+        
+        current_clip_name = selection.name.get_value()
 
         # Try to import PySide6, otherwise import PySide2
         try:
@@ -120,6 +120,7 @@ class batchgroup_ui(object):
         self.other_entry.setMaximumSize(QtCore.QSize(150, 26))
         self.other_entry.setStyleSheet('background: #202020')
         self.other_entry.setVisible(False)
+
 
         #### Task Menu ####
 
@@ -215,6 +216,7 @@ class batchgroup_ui(object):
 
         self.window.close()
 
+        clip = self.currnet_clip
         task = str(self.task_menu.currentText())
         other = str(self.other_entry.text())
         start_frame = int(self.start_frame_menu.currentText())
@@ -382,10 +384,10 @@ def load_clip_in_batch(clip):
 
 # Launch the UI for each clip selected to deal with multiple at the same time.
 def launch_ui(selection):
-    for clip in selection:
 
-        selected_clip = clip
-        batchgroup_ui(selected_clip)
+    # Launch the UI. This will spawn multiple windows but they're under each other.
+    for clip in selection:
+        batchgroup_ui(clip)
 
 def scope_clip(selection):
         import flame
