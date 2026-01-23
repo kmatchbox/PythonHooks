@@ -1,16 +1,20 @@
 """
 Script Name: Batchgroups From Clips
-Script Version: 1.0
+Script Version: 1.1
 Flame Version: 2025
 
 Creation date: 03.08.21
-Modified date: 02.12.25
+Modified date: 23.01.26
 
 Description:
 
     Creates a batchgroup from selected clips.
 
 Change Log:
+
+    v1.1: Added a pop-up to replace the various menu options. This allows the user
+          to also specifiy their own task which means the the rest of the workflow works
+          correctly.
 
     v1.0: Added a write node upon creation. This is hard-coded to my paths and folder structure.
 
