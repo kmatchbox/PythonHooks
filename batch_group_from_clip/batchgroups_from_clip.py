@@ -4,7 +4,7 @@ Script Version: 1.1
 Flame Version: 2025
 
 Creation date: 03.08.21
-Modified date: 22.01.26
+Modified date: 23.01.26
 
 Description:
 
@@ -12,11 +12,13 @@ Description:
 
 Change Log:
 
-    v1.1: Updated the naming convention to align with the v000 concept. _comp_ is no longer used.
-          This will allow us to push xxx_####_v000 out to grade and then all work after can automatically
-          be updated by the colorists.
+    v1.1: Added a pop-up to replace the various menu options. This allows the user
+          to also specifiy their own task which means the the rest of the workflow works
+          correctly. Sadly, this results in the ability to create one shot at a time.
+          Need to find fix.
 
-          Added the ability to choose to either make a render node, write node or both.
+          Fixed a naming issue with comps, was using previous logic that no longer
+          applies now that we're using v000.
 
     v1.0: Added a write node upon creation. This is hard-coded to my paths and folder structure.
 
@@ -47,14 +49,186 @@ Change Log:
 
 """
 
-make_render = True
-make_write = True
+class batchgroup_ui(object):
+
+    def __init__(self, selection):
+
+        global clip
+        clip = selection
+
+        self.main_window(selection)
+        
+
+    def main_window(self, selection):
+        import flame
+        import os
+        from functools import partial
+
+        current_clip_name = clip.name.get_value()
+        print (f"Window {selected_clip.name}")
+
+        # Try to import PySide6, otherwise import PySide2
+        try:
+            from PySide6 import QtCore, QtGui, QtWidgets
+        except ImportError:
+            from PySide2 import QtCore, QtGui, QtWidgets
+
+        # Get resolution depending on PySide version
+        if QtCore.__version_info__[0] < 6:
+            mainWindow = QtWidgets.QDesktopWidget()
+            QAction = QtWidgets.QAction
+        else:
+            mainWindow = QtGui.QGuiApplication.primaryScreen()
+            QAction = QtGui.QAction
+
+        resolution = mainWindow.screenGeometry()
+
+        # Define tasks
+        self.tasks = ["comp", "cleanup", "matte", "screen", "other"]
+
+        # Define start frames
+        self.start_frame = ["1001", "1"]
+
+        # Overall UI
+        self.window = QtWidgets.QWidget()
+        self.window.setMinimumSize(QtCore.QSize(200, 150))
+        self.window.setMaximumSize(QtCore.QSize(300, 150))
+        
+        self.window.setWindowTitle(current_clip_name)
+        self.window.setStyleSheet('background: #202020')
+        self.window.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+        self.window.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+
+        self.window.move((resolution.width() / 2) - (self.window.frameSize().width() / 2),
+                         (resolution.height() / 2) - (self.window.frameSize().height() / 2))
+
+
+        # Labels
+        self.task_label = QtWidgets.QLabel('Task:', self.window)
+        self.start_frame_label = QtWidgets.QLabel('Start Frame:', self.window)
+        self.other_label = QtWidgets.QLabel('Other:', self.window)
+        self.other_label.setVisible(False)
+
+        
+        self.task_label.setAlignment(QtCore.Qt.AlignRight)
+        self.start_frame_label.setAlignment(QtCore.Qt.AlignRight)
+        self.other_label.setAlignment(QtCore.Qt.AlignRight)
+
+        # Other field
+        self.other_entry = QtWidgets.QLineEdit(self.window)
+        self.other_entry.setMinimumSize(QtCore.QSize(150, 26))
+        self.other_entry.setMaximumSize(QtCore.QSize(150, 26))
+        self.other_entry.setStyleSheet('background: #202020')
+        self.other_entry.setVisible(False)
+
+        #### Task Menu ####
+
+        # Toggle the other field if the task is other
+        def task_change (task):
+            if task == "other":
+                self.other_entry.setStyleSheet('background: #373e47')
+                self.other_entry.setEnabled(True)
+                self.other_entry.setVisible(True)
+                self.other_label.setVisible(True)
+            else:
+                self.other_entry.setStyleSheet('background: #202020')
+                self.other_entry.setVisible(False)
+                self.other_entry.setEnabled(False)
+                self.other_entry.setText("")
+                self.other_label.setVisible(False)
+ 
+
+        # Task list drop-down
+        self.task_menu = QtWidgets.QComboBox(self.window)
+        self.task_menu.setMinimumSize(QtCore.QSize(150, 26))
+        self.task_menu.setMaximumSize(QtCore.QSize(150, 26))
+        self.task_menu.setStyleSheet('QComboBox {color: #9a9a9a; background-color: #24303d; font: 12pt "Discreet"}'
+                                     'QComboBox::item:selected {color: #6a6a6a; background-color: #24303d;}')
+
+        # Fill the task drop-down
+        for i in range(len(self.tasks)):
+            self.task_menu.addItem(self.tasks[i], i)
+
+        self.task_menu.setCurrentIndex(0)
+
+        ### Start Frame Manu ###
+
+        # Start frame list drop-down
+        self.start_frame_menu = QtWidgets.QComboBox(self.window)
+        self.start_frame_menu.setMinimumSize(QtCore.QSize(150, 26))
+        self.start_frame_menu.setMaximumSize(QtCore.QSize(150, 26))
+        self.start_frame_menu.setStyleSheet('QComboBox {color: #9a9a9a; background-color: #24303d; font: 12pt "Discreet"}'
+                                     'QComboBox::item:selected {color: #6a6a6a; background-color: #24303d;}')
+
+        # Fill the start frame drop-down
+        self.start_frame_menu.addItem("1001", 0)
+        self.start_frame_menu.addItem("1", 1)
+        self.start_frame_menu.setCurrentIndex(0)
+
+
+        self.task_menu.currentTextChanged.connect(task_change)
+
+        # Create / Cancel Buttons
+        self.create_btn = QtWidgets.QPushButton('Create', self.window)
+        self.create_btn.setMinimumSize(QtCore.QSize(110, 26))
+        self.create_btn.setMaximumSize(QtCore.QSize(110, 26))
+        self.create_btn.setStyleSheet('background: #732020')
+        self.create_btn.clicked.connect(self.push_to_create)
+
+        self.cancel_btn = QtWidgets.QPushButton('Cancel', self.window)
+        self.cancel_btn.setMinimumSize(QtCore.QSize(110, 26))
+        self.cancel_btn.setMaximumSize(QtCore.QSize(110, 26))
+        self.cancel_btn.setStyleSheet('background: #373737')
+        self.cancel_btn.clicked.connect(self.cancel)
+
+        # Layout
+        gridbox01 = QtWidgets.QGridLayout()
+        gridbox01.setVerticalSpacing(10)
+        gridbox01.setAlignment(QtCore.Qt.AlignLeft)
+        gridbox01.setHorizontalSpacing(10)
+
+        gridbox01.addWidget(self.task_label, 0, 0)
+        gridbox01.addWidget(self.task_menu, 0, 1)
+        gridbox01.addWidget(self.other_label, 1, 0)
+        gridbox01.addWidget(self.other_entry, 1, 1)
+        gridbox01.addWidget(self.start_frame_label, 2, 0)
+        gridbox01.addWidget(self.start_frame_menu, 2, 1)
+
+        hbox = QtWidgets.QHBoxLayout()
+        hbox.addWidget(self.cancel_btn)
+        hbox.addWidget(self.create_btn)
+
+        vbox = QtWidgets.QVBoxLayout()
+        vbox.setContentsMargins(10, 10, 10, 10)
+        vbox.addLayout(gridbox01)
+        vbox.addLayout(hbox)
+
+        self.window.setLayout(vbox)
+
+        self.window.show()
+
+    def cancel (self):
+        self.window.close()
+
+    def push_to_create (self):
+        import flame
+
+        self.window.close()
+
+        task = str(self.task_menu.currentText())
+        other = str(self.other_entry.text())
+        start_frame = int(self.start_frame_menu.currentText())
+
+        if other and task == "other":
+            task = other
+
+        # Create the batchgroup
+        create_batch_group(clip, task, start_frame)
+
+
 
 def create_batch_group(clip, task, frame):
     import flame
-
-    global make_render
-    global make_render
 
     try:
         clip_duration = clip.versions[0].tracks[0].segments[0].source_duration.frame
@@ -63,6 +237,7 @@ def create_batch_group(clip, task, frame):
 
     clip_shot_num = clip.versions[0].tracks[0].segments[0].shot_name
     tape_name = clip.versions[0].tracks[0].segments[0].tape_name
+    
 
     # Define variables to create the batchgroup
     schematic_reels_list = ["plates", "mattes", "pre_renders"]
@@ -88,29 +263,20 @@ def create_batch_group(clip, task, frame):
                                                     reels=schematic_reels_list,
                                                     shelf_reels=shelf_reels_list)
         
-    # Set the current iteration to overwrite any user settings that might interfere with our naming logic.
-    current_iteration = batchgroup.current_iteration
-    current_iteration.name = "<batch name>_v<iteration###>"
+        # Change the iteration naming if it's not a comp
+        current_iteration = batchgroup.current_iteration
+        current_iteration.name = "<batch name>_v<iteration###>"
 
+    # Create a render node with a few pre-set attributes.
+    render_node = create_render_node(clip, shot_num, tape_name, task)
 
-    # Create a render node if the user wants
-    if make_render:
-        render_node = create_render_node(clip, shot_num, tape_name, task)
+    render_node_object = flame.batch.get_node(render_node.get_value())
+    render_node_object.pos_x = 900
 
-        render_node_object = flame.batch.get_node(render_node.get_value())
-        render_node_object.pos_x = 900
-
-        # If we're creating a write node, raise the render node up otherwise keep it level
-        if make_write:
-            render_node_object.pos_y = 300
-        else:
-            render_node_object.pos_y = 0
-
-    # Create a write node if the user wants
-    if make_write:
-        write_node_object = create_write_node(clip, shot_num, tape_name, task)
-        write_node_object.pos_x = 900
-        write_node_object.pos_y = 0
+    # Create a write node with the correct attributes
+    write_node_object = create_write_node(clip, shot_num, tape_name, task)
+    write_node_object.pos_x = 900
+    write_node_object.pos_y = render_node_object.pos_y - 300
 
 
     loaded_plate = load_clip_in_batch(clip)
@@ -129,10 +295,9 @@ def create_batch_group(clip, task, frame):
     # Connect all nodes
     flame.batch.connect_nodes(loaded_plate_object, 'Default', mux_in, 'Default')
     flame.batch.connect_nodes(mux_in, 'Default', mux_out, 'Default')
-    if make_render:
-        flame.batch.connect_nodes(mux_out, 'Default', render_node_object, 'Default')
-    if make_write:
-        flame.batch.connect_nodes(mux_out, 'Default', write_node_object, 'Default')
+    flame.batch.connect_nodes(mux_out, 'Default', render_node_object, 'Default')
+    flame.batch.connect_nodes(mux_out, 'Default', write_node_object, 'Default')
+
 
 def create_render_node(clip, shot_num, tape_name, task):
     import flame
@@ -145,7 +310,10 @@ def create_render_node(clip, shot_num, tape_name, task):
 
     render_node = flame.batch.create_node("Render")
 
-    render_node.name = "<batch name>_v<iteration###>"
+    if task == "comp":
+        render_node.name = "<batch name>_comp_v<iteration###>"
+    else:
+        render_node.name = "<batch name>_v<iteration###>"
 
     render_node.shot_name = str(shot_num)
     render_node.frame_rate = clip.frame_rate
@@ -195,10 +363,9 @@ def create_write_node(clip, shot_num, tape_name, task):
     if isinstance(clip.out_mark, flame.PyTime):
         write_node.out_mark = clip.out_mark
 
+    write_node.media_path = str(base_path)
     write_node.name = "<batch name>_v<iteration###>"
     write_node.create_clip_path = "<shot name>/comps/<batch name>"
-
-    write_node.media_path = str(base_path)
     write_node.media_path_pattern = "<shot name>/comps/flame/" + task + "/<version name>/<name>."
     write_node.include_setup_path = "<shot name>/comp_scripts/flame/" + task + "/<batch iteration>"
 
@@ -213,39 +380,12 @@ def load_clip_in_batch(clip):
     loaded_clip = flame.media_panel.copy(clip, dest_reel_for_clip)
     return loaded_clip[0].name
 
-# Frame 1 defines
-def create_comp_f1(selection):
+# Launch the UI for each clip selected to deal with multiple at the same time.
+def launch_ui(selection):
     for clip in selection:
-        create_batch_group(clip, "comp", 1)
 
-def create_matte_f1(selection):
-    for clip in selection:
-        create_batch_group(clip, "matte", 1)
-
-def create_cleanup_f1(selection):
-    for clip in selection:
-        create_batch_group(clip, "cleanup", 1)
-
-def create_screen_f1(selection):
-    for clip in selection:
-        create_batch_group(clip, "screen", 1)
-
-# Frame 1001 defines
-def create_comp_f1001(selection):
-    for clip in selection:
-        create_batch_group(clip, "comp", 1001)
-
-def create_cleanup_f1001(selection):
-    for clip in selection:
-        create_batch_group(clip, "cleanup", 1001)
-
-def create_matte_f1001(selection):
-    for clip in selection:
-        create_batch_group(clip, "matte", 1001)
-
-def create_screen_f1001(selection):
-    for clip in selection:
-        create_batch_group(clip, "screen", 1001)
+        selected_clip = clip
+        batchgroup_ui(selected_clip)
 
 def scope_clip(selection):
         import flame
@@ -258,100 +398,14 @@ def scope_clip(selection):
 def get_media_panel_custom_ui_actions():
     return [
         {
-        "name": "Create Batchgroup",
-            "hierarchy": [],
-            "actions": [],
-        },
-        {
-            "name": "Comp",
-            "hierarchy": ["Create Batchgroup"],
-            "order": 1,
-            "actions": [    
-                {
-                    "name": "Frame 1",
-                    "order": 1,
-                    "isVisable": scope_clip,
-                    "isEnabled": scope_clip,
-                    "minimumVersion": "2025.2",
-                    "execute": create_comp_f1                },
-                {
-                    "name": "Frame 1001",
-                    "order": 2,
-                    "isVisable": scope_clip,
-                    "isEnabled": scope_clip,
-                    "minimumVersion": "2025.2",
-                    "execute": create_comp_f1001
-                }
-           ]
-        },
-        {
-            "name": "Clean-up",
-            "hierarchy": ["Create Batchgroup"],
-            "order": 2,
+            "name": "Create Batchgroup",
             "actions": [
                 {
-                    "name": "Frame 1",
-                    "order": 1,
+                    "name": "Create Batchgroup",
                     "isVisable": scope_clip,
                     "isEnabled": scope_clip,
-                    "minimumVersion": "2025.2",
-                    "execute": create_cleanup_f1
-                },
-                {
-                    "name": "Frame 1001",
-                    "order": 2,
-                    "isVisable": scope_clip,
-                    "isEnabled": scope_clip,
-                    "minimumVersion": "2025.2",
-                    "execute": create_cleanup_f1001
+                    "execute": launch_ui
                 }
-           ]
-        },
-        {
-            "name": "Screen Comp",
-            "hierarchy": ["Create Batchgroup"],
-            "order": 3,
-            "actions": [
-                {
-                    "name": "Frame 1",
-                    "order": 1,
-                    "isVisable": scope_clip,
-                    "isEnabled": scope_clip,
-                    "minimumVersion": "2025.2",
-                    "execute": create_screen_f1
-                },
-                {
-                    "name": "Frame 1001",
-                    "order": 2,
-                    "isVisable": scope_clip,
-                    "isEnabled": scope_clip,
-                    "minimumVersion": "2025.2",
-                    "execute": create_screen_f1001
-                }
-           ]
-        },
-        {
-            "name": "Matte",
-            "hierarchy": ["Create Batchgroup"],
-            "order": 4,
-            "separator": "below",
-            "actions": [
-                {
-                    "name": "Frame 1",
-                    "order": 1,
-                    "isVisable": scope_clip,
-                    "isEnabled": scope_clip,
-                    "minimumVersion": "2025.2",
-                    "execute": create_matte_f1
-                },
-                {
-                    "name": "Frame 1001",
-                    "order": 2,
-                    "isVisable": scope_clip,
-                    "isEnabled": scope_clip,
-                    "minimumVersion": "2025.2",
-                    "execute": create_matte_f1001
-                }
-           ]
+            ]
         }
     ]
