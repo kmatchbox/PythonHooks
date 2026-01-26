@@ -4,13 +4,18 @@ Script Version: 1.2
 Flame Version: 2025
 
 Creation date: 03.08.21
-Modified date: 23.01.26
+Modified date: 26.01.26
 
 Description:
 
     Creates a batchgroup from selected clips.
 
 Change Log:
+
+    v1.3: Added option to the manu for fast comp creation (comp, frame 1001) as it's the most used
+          and far faster to create batchgrups for a large number of shots.
+
+          Added support for either making a render node, write node or both.
 
     v1.2: Can now have multiple selections. Forgot to use self. for the clip so it kept
           taking the first selection. Dumb mistake.
@@ -51,6 +56,9 @@ Change Log:
     v0.1: Initial Release.
 
 """
+
+make_render = False
+make_write = True
 
 class batchgroup_ui(object):
 
@@ -265,20 +273,21 @@ def create_batch_group(clip, task, frame):
                                                     reels=schematic_reels_list,
                                                     shelf_reels=shelf_reels_list)
         
-        # Change the iteration naming if it's not a comp
-        current_iteration = batchgroup.current_iteration
-        current_iteration.name = "<batch name>_v<iteration###>"
+    # Change the iteration naming
+    current_iteration = batchgroup.current_iteration
+    current_iteration.name = "<batch name>_v<iteration###>"
 
     # Create a render node with a few pre-set attributes.
-    render_node = create_render_node(clip, shot_num, tape_name, task)
-
-    render_node_object = flame.batch.get_node(render_node.get_value())
-    render_node_object.pos_x = 900
+    if make_render:
+        render_node_object = create_render_node(clip, shot_num, tape_name, task)
+        render_node_object.pos_x = 900
+        if make_write:
+            render_node_object.pos_y = 200
 
     # Create a write node with the correct attributes
-    write_node_object = create_write_node(clip, shot_num, tape_name, task)
-    write_node_object.pos_x = 900
-    write_node_object.pos_y = render_node_object.pos_y - 300
+    if make_write:
+        write_node_object = create_write_node(clip, shot_num, tape_name, task)
+        write_node_object.pos_x = 900
 
 
     loaded_plate = load_clip_in_batch(clip)
@@ -297,8 +306,12 @@ def create_batch_group(clip, task, frame):
     # Connect all nodes
     flame.batch.connect_nodes(loaded_plate_object, 'Default', mux_in, 'Default')
     flame.batch.connect_nodes(mux_in, 'Default', mux_out, 'Default')
-    flame.batch.connect_nodes(mux_out, 'Default', render_node_object, 'Default')
-    flame.batch.connect_nodes(mux_out, 'Default', write_node_object, 'Default')
+
+    if make_render:
+        flame.batch.connect_nodes(mux_out, 'Default', render_node_object, 'Default')
+
+    if make_write:
+        flame.batch.connect_nodes(mux_out, 'Default', write_node_object, 'Default')
 
 
 def create_render_node(clip, shot_num, tape_name, task):
@@ -332,7 +345,7 @@ def create_render_node(clip, shot_num, tape_name, task):
     if isinstance(clip.out_mark, flame.PyTime):
         render_node.out_mark = clip.out_mark
 
-    return render_node.name
+    return render_node
 
 def create_write_node(clip, shot_num, tape_name, task):
     import flame
@@ -355,7 +368,7 @@ def create_write_node(clip, shot_num, tape_name, task):
     write_node.compress_mode = "DWAA"
     write_node.bit_depth = "16-bit fp"
 
-    write_node.add_to_workspace = False
+    write_node.add_to_workspace = True
     write_node.include_setup = True
 
     # Check if we have in/out marks and they're type PyTime
@@ -389,6 +402,11 @@ def launch_ui(selection):
     for clip in selection:
         batchgroup_ui(clip)
 
+# Frame 1001 defines
+def create_comp_f1001(selection):
+    for clip in selection:
+        create_batch_group(clip, "comp", 1001)
+
 def scope_clip(selection):
         import flame
         for item in selection:
@@ -403,11 +421,17 @@ def get_media_panel_custom_ui_actions():
             "name": "Create Batchgroup",
             "actions": [
                 {
-                    "name": "Create Batchgroup",
+                    "name": "Create Batchgroup (Comp, 1001)",
+                    "isVisable": scope_clip,
+                    "isEnabled": scope_clip,
+                    "execute": create_comp_f1001
+                },
+                {
+                    "name": "Create Batchgroup (Options)",
                     "isVisable": scope_clip,
                     "isEnabled": scope_clip,
                     "execute": launch_ui
-                }
+                }                
             ]
         }
     ]
