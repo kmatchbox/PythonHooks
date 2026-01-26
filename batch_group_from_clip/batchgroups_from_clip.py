@@ -1,6 +1,6 @@
 """
 Script Name: Batchgroups From Clips
-Script Version: 1.2
+Script Version: 1.4
 Flame Version: 2025
 
 Creation date: 03.08.21
