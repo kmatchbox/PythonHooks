@@ -1,6 +1,6 @@
 """
 Script Name: Batchgroups From Clips
-Script Version: 1.1
+Script Version: 1.5
 Flame Version: 2025
 
 Creation date: 03.08.21
@@ -11,6 +11,18 @@ Description:
     Creates a batchgroup from selected clips.
 
 Change Log:
+
+    v1.5: Fixed git merge.
+
+    v1.4: Replaces any spaces in input with _.
+
+    v1.3: Added option to the manu for fast comp creation (comp, frame 1001) as it's the most used
+          and far faster to create batchgrups for a large number of shots.
+
+          Added support for either making a render node, write node or both.
+
+    v1.2: Can now have multiple selections. Forgot to use self. for the clip so it kept
+          taking the first selection. Dumb mistake.
 
     v1.1: Added a pop-up to replace the various menu options. This allows the user
           to also specifiy their own task which means the the rest of the workflow works
