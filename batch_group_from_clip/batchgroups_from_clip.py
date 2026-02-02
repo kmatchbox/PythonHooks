@@ -1,6 +1,6 @@
 """
 Script Name: Batchgroups From Clips
-Script Version: 1.4
+Script Version: 1.5
 Flame Version: 2025
 
 Creation date: 03.08.21
@@ -11,6 +11,8 @@ Description:
     Creates a batchgroup from selected clips.
 
 Change Log:
+
+    v1.5: Fixed git merge.
 
     v1.4: Replaces any spaces in input with _.
 
