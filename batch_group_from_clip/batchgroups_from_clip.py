@@ -1,6 +1,6 @@
 """
 Script Name: Batchgroups From Clips
-Script Version: 1.5
+Script Version: 1.6
 Flame Version: 2025
 
 Creation date: 03.08.21
@@ -11,7 +11,9 @@ Description:
     Creates a batchgroup from selected clips.
 
 Change Log:
-
+    v1.6: Fixed naming of render nodes. Was still using _comp_ which wouldn't work
+          for the v000 workflow obviously.
+    
     v1.5: Fixed git merge.
 
     v1.4: Replaces any spaces in input with _.
@@ -332,11 +334,7 @@ def create_render_node(clip, shot_num, tape_name, task):
 
     render_node = flame.batch.create_node("Render")
 
-    if task == "comp":
-        render_node.name = "<batch name>_comp_v<iteration###>"
-    else:
-        render_node.name = "<batch name>_v<iteration###>"
-
+    render_node.name = "<batch name>_v<iteration###>"
     render_node.shot_name = str(shot_num)
     render_node.frame_rate = clip.frame_rate
     render_node.source_timecode = clip.start_time
