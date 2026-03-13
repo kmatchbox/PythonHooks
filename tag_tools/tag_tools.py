@@ -67,7 +67,7 @@ Updates:
 import os
 import sys
 import flame
-from qt_metadata import QuickTimeFile
+from lib.qt_metadata import QuickTimeFile
 from lib.pyflame_lib_tag_tools import *
 
 # ==============================================================================
