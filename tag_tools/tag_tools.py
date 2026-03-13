@@ -1,10 +1,33 @@
-"""
-Script Name: Tag Tools
-Script Version: 1.0
-Flame Version: 2025
+# Tag Tools
+# Copyright (c) 2026 Kyle Obley
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# License:       GNU General Public License v3.0 (GPL-3.0)
+#                https://www.gnu.org/licenses/gpl-3.0.en.html
 
-Creation date: 12.03.26
-Modified date: 12.03.26
+"""
+Script Name:    Tag Tools
+Script Version: v1.1
+Flame Version:  2025.1
+Written by:     Kyle Obley
+Creation Date:  12.03.26
+Update Date:    03.13.26
+
+License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
+
+Script Type:    Media Panel, Media Hub
 
 Description:
 
@@ -12,22 +35,66 @@ Description:
     of being able to track original sequence name from Flame vs client name
     as well as audio.
 
-    Provides renaming tools to be able 
+    Very much a work in progress
 
-Change Log:
+Menus:
 
-    v1.0: Initial Release
+    Flame Media Panel -> Right-click -> Tag Tools
+    Flame Media Hub -> Right-click -> Tag Tools
 
+To install:
+
+    Copy script into /opt/Autodesk/shared/python/tag_tools
+
+Updates:
+
+    v1.1 13.03.26
+        - Added ability to read/set tags from imported QT.
+        - Added ability to dump the contents of selected QT fiels within the media panel
+          to the terminal.
+        - Added UI via PyFlameUI Builder
+        - Added ability to export from Flame and set the metadata afterwards. Current
+          this is only working in the foreground. Need to figure out Backburner.
+
+    v1.0 12.03.26
+        - Initial release.
 """
 
-#-------------------------------------
+# ==============================================================================
 # [Imports]
-#-------------------------------------
-import flame
-import sys
-import os
-from qt_metadata_lib import QuickTimeFile
+# ==============================================================================
 
+import os
+import sys
+import flame
+from qt_metadata import QuickTimeFile
+from lib.pyflame_lib_tag_tools import *
+
+# ==============================================================================
+# [Constants]
+# ==============================================================================
+
+SCRIPT_NAME    = 'Tag Tools'
+SCRIPT_VERSION = 'v1.1'
+SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
+
+
+# ==============================================================================
+# [Helper Functions]
+# ==============================================================================-
+
+# List / String helper functions. Using + as the separator as it feels the best choice at the moment.
+def list_to_string(meta_list):
+    meta_string = "+".join(meta_list)
+    return meta_string
+
+def string_to_list(meta_string):
+    meta_list = meta_string.split("+")
+    return meta_list
+
+# ==============================================================================
+# [Flame Function]
+# ==============================================================================
 
 # Primary function to set tag names. This is versitale and can be used for anything.
 # This will also check if the tag already exists and update it accordingly.
@@ -144,6 +211,7 @@ def set_audio(selection):
                         for audio in channel.segments:
                             if audio:
                                 if audio.file_path and audio.file_path != '':
+
                                     # Get the basename, the whole path would be too long
                                     audio_file = os.path.basename(audio.file_path)
                                     audio_list.append(audio_file)
@@ -162,39 +230,402 @@ def set_audio(selection):
         else:
             print(f"[ Tagging Tools ] The seuqnece {item.name.get_value()} has no audio files.")
 
+def get_tags_from_qt(selection):
+    for clip in selection:
+        path = clip.versions[0].tracks[0].segments[0].file_path
+
+        # Get the existing metadata
+        qt = QuickTimeFile(path)
+        metadata = qt.get_metadata("com.apple.quicktime.comment")
+
+        if metadata == '':
+            print(f"[ Tagging Tools ] Error: The file {path} has no metadata.")
+        else:
+
+            # Convert the string to a list and set as the tag
+            meta_list = string_to_list(metadata)
+
+            # We could just dump this right into the tags as-is, but
+            # let's be good and run it through our set_tag function so
+            # everything is the same.
+            for item in meta_list:
+                tag_name = item.split(":")[0]
+                value = item.split(":")[1]
+
+                set_tag(clip, tag_name, value)
 
 
-# Set the tags within the QT file itself
-# Not used yet.
-def set_qt_tags(selection, tags):
-    qt = QuickTimeFile(selection)
-    print(qt.get_metadata("com.apple.quicktime.comment"))
+def set_tags_post_export(full_path, tags):
+    #print(f"Set Tags Post : Full path: {full_path}")
+    #print(f"Set Tags Post :Tags: {tags}")
 
-    qt.set_metadata("com.apple.quicktime.comment", "int_name:xxx_30_xx01_0303")
-    qt.save()
-
-    print(qt.get_metadata("com.apple.quicktime.comment"))
+    qt = QuickTimeFile(full_path)
+    qt.set_metadata("com.apple.quicktime.comment", tags)
+    qt.save(full_path)
 
 
-#-------------------------------------
-# [Scope]
-#-------------------------------------
+
+# ==============================================================================
+# [Hook Overwrite & Backburner Stuff]
+# ==============================================================================
+
+
+class HooksOverride(object):
+        def __init__(self, foreground):
+            self._foreground = foreground
+
+        def postExportAsset(self, info, userData, *args, **kwargs):
+            del args, kwargs  # Unused necessary parameters
+            full_path = os.path.join(info["destinationPath"], info["resolvedPath"])
+
+            if self._foreground:
+                set_tags_post_export(full_path, userData)
+            else:
+                create_python_backburner_job(
+                    job_name="Updating tags %s" % info["assetName"],
+                    description="Updating tags %s" % info["assetName"],
+                    dependencies=info["backgroundJobId"],
+                    function="set_tags_post_export",
+                    args=[full_path, userData],
+                )
+
+def create_backburner_job(job_name, description, dependencies, cmd):
+    """
+    Send a command line job to Backburner.
+
+    :param job_name: Name of the Backburner job
+    :param description: Description of the Backburner job
+    :param dependencies: None if the Backburner job should execute arbitrarily.
+                         If you want to set up the job to executes after another
+                         known task, pass the Backburner id or a list of ids
+                          here. This is typically used in conjunction with a
+                         postExportAsset hook where the export task runs on
+                         Backburner. In this case, the hook will return the
+                         Backburner id. By passing that id to this method,
+                         you create a job which only executes after the main
+                         export task has completed.
+    :param cmd: Command line to execute
+    :return backburner_job_id: Id of the Backburner job created
+    """
+
+    # The Backburner command job executable
+    backburner_job_cmd = os.path.join("/opt", "Autodesk", "backburner", "cmdjob")
+
+    backburner_args = []
+    backburner_args.append("-userRights")  # Honor application user (not root)
+    backburner_args.append("-timeout:600")
+    backburner_args.append('-jobName:"%s"' % job_name)
+    backburner_args.append('-description:"%s"' % description)
+
+    # Set the Backburner job dependencies
+    if dependencies:
+        if isinstance(dependencies, list):
+            backburner_args.append("-dependencies:%s" % ",".join(dependencies))
+        else:
+            backburner_args.append("-dependencies:%s" % dependencies)
+
+    full_cmd = "%s %s %s" % (backburner_job_cmd, " ".join(backburner_args), cmd)
+
+    stdout, stderr = execute_command(full_cmd)
+    print(stdout)
+
+    job_id_regex = re.compile(r"(?<=Successfully submitted job )(\d+)")
+    match = job_id_regex.search(stdout)
+
+    if match:
+        backburner_job_id = match.group(0)
+        print("Backburner job created (%s)" % backburner_job_id)
+        return backburner_job_id
+
+    else:
+        print("Backburner job not created\n%s" % stderr)
+
+    return None
+
+def create_python_backburner_job(job_name, description, dependencies, function, args=None):
+    """
+    Send a callback to this Python file using command line job to backburner.
+
+    :note: Beware. The file must be executable and will use the Python
+           interpreter bundled with Flame. Change the header for a different
+           Python intepreter.
+
+    :param job_name: Name of the backburner job
+    :param description: Description of the backburner job
+    :param dependencies: None if the backburner job should execute arbitrarily.
+                         If you want to set up the job to executes after another
+                         known task, pass the backburner id or a list of ids
+                         here. This is typically used in conjunction with a
+                         postExportAsset hook where the export task runs on
+                         backburner. In this case, the hook will return the
+                         backburner id. By passing that id to this method,
+                         you create a job which only executes after the main
+                         export task has completed.
+    :param function: Function name to call
+    :param args: Function arguments
+    :return backburner_job_id: Id of the backburner job created
+    """
+    return create_backburner_job(
+        job_name=job_name,
+        description=description,
+        dependencies=dependencies,
+        cmd=" ".join([os.path.abspath(__file__), function, " ".join(args)]),
+    )
+
+def execute_command(command):
+
+
+    # Flame 2022.2+ provides a way to run a command line through the
+    # Autodesk Flame Multi-Purpose Daemon. This way of starting new processes
+    # is better since any native python subprocess command (os.system,
+    # subprocess, Popen, etc) will call fork() which will duplicate the process
+    # memory before calling exec(). This can be costly especially for a process
+    # like Flame.
+    #
+    # Note: Environment variables will not be forwarded to the executed command.
+    #
+    if "execute_command" in dir(flame):
+        _, stdout, stderr = flame.execute_command(
+            command=command,
+            blocking=True,
+            shell=True,
+            capture_stdout=True,
+            capture_stderr=True,
+        )
+    else:
+        import subprocess
+
+        process = subprocess.Popen([command], stdout=subprocess.PIPE, shell=True)
+        stdout, stderr = process.communicate()
+        stdout = stdout.decode("utf-8") if stdout else None
+        stderr = stderr.decode("utf-8") if stderr else None
+    return stdout, stderr
+
+# ==============================================================================
+# [UI & Exporting Function]
+# ==============================================================================
+
+class tag_tools_export:
+
+    def __init__(self, selection) -> None:
+
+        pyflame.print_title(f'{SCRIPT_NAME} {SCRIPT_VERSION}')
+
+        # Check script path, if path is incorrect, stop script.
+        if not pyflame.verify_script_install():
+            return
+
+        # Make selection available to the other functions
+        self.selection = selection
+
+        # Get env variable until we get config working
+        if os.environ.get("TAG_TOOLS_PATH"):
+            self.previous_path = os.environ.get("TAG_TOOLS_PATH")
+        else:
+            self.previous_path = ''
+
+        # Open main window
+        self.main_window()
+
+
+    def main_window(self) -> None:
+        """
+        Main Window
+        ===========
+
+        Main window for script.
+        """
+
+        # Buuild list of export presets for menu
+        self.export_presets = pyflame.get_export_preset_names()
+
+
+        def export_sequences() -> None:
+            """
+            Pulls together the destination path, export preset and builds the export call.
+            """
+
+            self.window.close()
+
+            # Get path and preset path from preset name
+            destination_path = self.destination_browser.path
+            preset_path = pyflame.convert_export_preset_name_to_path(self.preset_menu.text)
+
+            # Get foreground option
+            #foreground = self.foreground_button.checked
+            foreground = True
+
+            print(f"Destination: {destination_path}")
+            print(f"Preset path: {preset_path}")
+
+
+            # Set env variable for now until we get config working
+            os.environ["TAG_TOOLS_PATH"] = destination_path
+
+            # Define exporter
+            exporter = flame.PyExporter()
+            exporter.foreground = foreground
+            
+            for item in self.selection:
+                print(f"[ Tagging Tools ] Exporting: {item.name.get_value()}")
+
+                # Create an empty tags
+                tags = []
+
+                # Get existing tags
+                tags = list_to_string(item.tags.get_value())
+
+                exporter.export(item, preset_path, destination_path, hooks=HooksOverride(foreground), hooks_user_data=tags)
+
+        def close_window() -> None:
+            """
+            Close window when escape is pressed.
+            """
+
+            self.window.close()
+
+        # ------------------------------------------------------------------------------
+        # [Start Window Build]
+        # ------------------------------------------------------------------------------
+
+        # Window
+        self.window = PyFlameWindow(
+            title=f'{SCRIPT_NAME} Exporter <small>{SCRIPT_VERSION}',
+            parent=None,
+            return_pressed=export_sequences,
+            escape_pressed=close_window,
+            grid_layout_columns=3,
+            grid_layout_rows=5,
+            )
+
+        # Labels
+        self.destination_label = PyFlameLabel(
+            text='Destination Folder',
+            style=Style.NORMAL,
+            align=Align.LEFT,
+            )
+        self.preset_label = PyFlameLabel(
+            text='Preset',
+            style=Style.NORMAL,
+            align=Align.LEFT,
+            )
+
+        # Entries
+        self.destination_browser = PyFlameEntryBrowser(
+            path=self.previous_path,
+            placeholder_text='/location/to/export',
+            browser_type=BrowserType.DIRECTORY,
+            browser_title='Select File',
+            )
+
+        # Buttons
+        self.cancel_button = PyFlameButton(
+            text='Cancel',
+            color=Color.GRAY,
+            tooltip='',
+            connect=close_window,
+            )
+        self.export_button = PyFlameButton(
+            text='Export',
+            color=Color.BLUE,
+            tooltip='',
+            connect=export_sequences,
+            )
+
+        self.foreground_button = PyFlamePushButton(
+            text='Foreground',
+            checked=True,
+            tooltip='',
+            )
+
+        # Menus
+        self.preset_menu = PyFlameMenu(
+            text='Select preset',
+            menu_options=self.export_presets,
+            align=Align.LEFT,
+            menu_indicator=False,
+            tooltip='',
+            )
+        
+
+        # ------------------------------------------------------------------------------
+        # [Widget Layout]
+        # ------------------------------------------------------------------------------
+
+        self.window.grid_layout.addWidget(self.preset_label, 0, 0)
+        self.window.grid_layout.addWidget(self.preset_menu, 0, 1, 1, 2)
+        self.window.grid_layout.addWidget(self.destination_label, 1, 0)
+        self.window.grid_layout.addWidget(self.destination_browser, 1, 1, 1, 2)
+        self.window.grid_layout.addWidget(self.foreground_button, 2, 1)
+        self.window.grid_layout.addWidget(self.cancel_button, 4, 1)
+        self.window.grid_layout.addWidget(self.export_button, 4, 2)
+
+
+        self.destination_browser.set_focus()
+        # ------------------------------------------------------------------------------
+        # [End Window Build]
+        # ------------------------------------------------------------------------------
+
+
+# ==============================================================================
+# [Filesystem Funection]
+# ==============================================================================
+def dump_metadata_to_terminal(selection):
+    for item in selection:
+        path = item.path
+        basename = os.path.basename(path)
+
+        qt = QuickTimeFile(path)
+        metadata = qt.get_metadata("com.apple.quicktime.comment")
+
+        if metadata:
+            # Convert the string to a list and set as the tag
+            meta_list = string_to_list(metadata)
+            print(f"[ Tagging Tools ] Metadata dump for {basename} -> {meta_list}")
+        else:
+            print(f"[ Tagging Tools ] Metadata dump for {basename} -> None")
+
+
+
+
+# ==============================================================================
+# [Scoping]
+# ==============================================================================
 def sequence_selected(selection):
     for item in selection:
         if isinstance(item, (flame.PySequence)):
             return True
     return False
 
+def qt_selected_flame(selection):
+    for item in selection:
+        if isinstance(item, (flame.PyClip)):
+            path = item.versions[0].tracks[0].segments[0].file_path
+            if path.endswith(".mov") or path.endswith(".mp4"):
+                return True
+    return False
+
+def is_mov(selection):
+    import os
+    for item in selection:
+        if os.path.splitext(item.path)[1] == '.mov' or os.path.splitext(item.path)[1] == '.mp4':
+            return True
+    return False
+
+# ==============================================================================
+# [Flame Menus - Media Panel]
+# ==============================================================================
+
 def get_media_panel_custom_ui_actions():
     return [
 
         {
-            "name": "Set Tag",
+            "name": "Set/Get Tag",
             "hierarchy": ["Tagging Tools"],
             "order": 1,
             "actions": [
                 {
-                    "name": "Current Name -> Internal Name",
+                    "name": "Current Name → Internal Name",
                     "order": 1,
                     "isVisable": sequence_selected,
                     "isEnabled": sequence_selected,
@@ -202,7 +633,7 @@ def get_media_panel_custom_ui_actions():
                     "minimumVersion": "2025.1"
                 },
                 {
-                    "name": "Current Name -> Client Name",
+                    "name": "Current Name → Client Name",
                     "order": 2,
                     "isVisable": sequence_selected,
                     "isEnabled": sequence_selected,
@@ -210,7 +641,7 @@ def get_media_panel_custom_ui_actions():
                     "minimumVersion": "2025.1"
                 },
                 {
-                    "name": "Current Name -> Both (Split internal__client)",
+                    "name": "Current Name → Both (Split internal__client)",
                     "order": 2,
                     "isVisable": sequence_selected,
                     "isEnabled": sequence_selected,
@@ -218,11 +649,19 @@ def get_media_panel_custom_ui_actions():
                     "minimumVersion": "2025.1"
                 },
                 {
-                    "name": "Current Audio -> Audio",
+                    "name": "Current Audio → Audio",
                     "order": 3,
                     "isVisable": sequence_selected,
                     "isEnabled": sequence_selected,
                     "execute": set_audio,
+                    "minimumVersion": "2025.1"
+                },
+                {
+                    "name": "Get tags from QuickTime",
+                    "order": 4,
+                    "isVisable": qt_selected_flame,
+                    "isEnabled": qt_selected_flame,
+                    "execute": get_tags_from_qt,
                     "minimumVersion": "2025.1"
                 }
            ]
@@ -249,5 +688,40 @@ def get_media_panel_custom_ui_actions():
                     "minimumVersion": "2025.1"
                 }
            ]
+        },
+        {
+            "name": "Export Sequences With Tags",
+            "hierarchy": ["Tagging Tools"],
+            "order": 2,
+            "actions": [
+                {
+                    "name": "Open Export Window",
+                    "order": 1,
+                    "isVisable": sequence_selected,
+                    "isEnabled": sequence_selected,
+                    "execute": tag_tools_export,
+                    "minimumVersion": "2025.1"
+                }
+           ]
+        }
+    ]
+
+# ==============================================================================
+# [Flame Menus - Media Hub]
+# ==============================================================================
+def get_mediahub_files_custom_ui_actions():
+    return [
+        {
+            "name": "Tagging Tools",
+            "actions": [
+                {
+                    "name": "Dump metadata to terminal",
+                    "order": 1,
+                    "isVisable": is_mov,
+                    "isEnabled": is_mov,
+                    "execute": dump_metadata_to_terminal,
+                    "minimumVersion": "2025.1"
+                }
+            ]
         }
     ]
