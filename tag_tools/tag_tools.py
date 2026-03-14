@@ -19,11 +19,11 @@
 
 """
 Script Name:    Tag Tools
-Script Version: v1.1
+Script Version: v1.2
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  12.03.26
-Update Date:    03.13.26
+Update Date:    14.03.26
 
 License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
 
@@ -48,6 +48,9 @@ To install:
 
 Updates:
 
+    v1.2 14.03.26
+        - Added ability to rename files on the filesystem to internal/external name.
+
     v1.1 13.03.26
         - Added ability to read/set tags from imported QT.
         - Added ability to dump the contents of selected QT fiels within the media panel
@@ -67,6 +70,7 @@ Updates:
 import os
 import sys
 import flame
+import shutil
 from lib.qt_metadata import QuickTimeFile
 from lib.pyflame_lib_tag_tools import *
 
@@ -75,7 +79,7 @@ from lib.pyflame_lib_tag_tools import *
 # ==============================================================================
 
 SCRIPT_NAME    = 'Tag Tools'
-SCRIPT_VERSION = 'v1.1'
+SCRIPT_VERSION = 'v1.2'
 SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -264,7 +268,6 @@ def set_tags_post_export(full_path, tags):
     qt.save(full_path)
 
 
-
 # ==============================================================================
 # [Hook Overwrite & Backburner Stuff]
 # ==============================================================================
@@ -402,7 +405,7 @@ def execute_command(command):
     return stdout, stderr
 
 # ==============================================================================
-# [UI & Exporting Function]
+# [UI & Exporting Functions]
 # ==============================================================================
 
 class tag_tools_export:
@@ -568,9 +571,9 @@ class tag_tools_export:
 
 
 # ==============================================================================
-# [Filesystem Funection]
+# [Filesystem Funections]
 # ==============================================================================
-def dump_metadata_to_terminal(selection):
+def fs_dump_metadata_to_terminal(selection):
     for item in selection:
         path = item.path
         basename = os.path.basename(path)
@@ -584,6 +587,53 @@ def dump_metadata_to_terminal(selection):
             print(f"[ Tagging Tools ] Metadata dump for {basename} -> {meta_list}")
         else:
             print(f"[ Tagging Tools ] Metadata dump for {basename} -> None")
+
+
+def fs_rename_qt(file, tag_name):
+    path = os.path.dirname(file)
+    basename = os.path.basename(file)
+    ext = os.path.splitext(file)[1]
+
+    qt = QuickTimeFile(file)
+    metadata = qt.get_metadata("com.apple.quicktime.comment")
+
+    if metadata:
+        meta_list = string_to_list(metadata)
+        found_tag = False
+
+        for item in meta_list:
+            if item.startswith(tag_name):
+                
+                # Get the new tag and add the extension.
+                new_name = item.split(tag_name+":")[1] + ext
+                new_name_path = os.path.join(path, new_name)
+                found_tag = True
+
+                try:
+                    shutil.move(file, new_name_path)
+                    print (f"[ Tagging Tools ] Renamed {basename} to {new_name}")
+
+                except Exception as e:
+                    print (f"Error renaming file: {e}")
+        # Didn't fine the tag, say it doesn't exist.
+        if not found_tag:
+            print (f"[ Tagging Tools ] Error {basename} doesn't have {tag_name} tag set")
+    
+    else:
+        print (f"[ Tagging Tools ] Error {basename} doesn't have any metadata")
+
+    # Refresh the media panel at the end of everything
+    flame.execute_shortcut('Refresh the MediaHub\'s Folders and Files')
+
+
+def fs_rename_to_client(selection):
+    for item in selection:
+        fs_rename_qt(item.path, "client_name")
+
+def fs_rename_to_internal(selection):
+    for item in selection:
+        fs_rename_qt(item.path, "internal_name")
+
 
 
 
@@ -692,7 +742,7 @@ def get_media_panel_custom_ui_actions():
         {
             "name": "Export Sequences With Tags",
             "hierarchy": ["Tagging Tools"],
-            "order": 2,
+            "order": 4,
             "actions": [
                 {
                     "name": "Open Export Window",
@@ -719,7 +769,23 @@ def get_mediahub_files_custom_ui_actions():
                     "order": 1,
                     "isVisable": is_mov,
                     "isEnabled": is_mov,
-                    "execute": dump_metadata_to_terminal,
+                    "execute": fs_dump_metadata_to_terminal,
+                    "minimumVersion": "2025.1"
+                },
+                {
+                    "name": "Rename → Internal Name",
+                    "order": 2,
+                    "isVisable": is_mov,
+                    "isEnabled": is_mov,
+                    "execute": fs_rename_to_internal,
+                    "minimumVersion": "2025.1"
+                },
+                {
+                    "name": "Rename → Client Name",
+                    "order": 3,
+                    "isVisable": is_mov,
+                    "isEnabled": is_mov,
+                    "execute": fs_rename_to_client,
                     "minimumVersion": "2025.1"
                 }
             ]
