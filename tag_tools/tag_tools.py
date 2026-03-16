@@ -19,11 +19,11 @@
 
 """
 Script Name:    Tag Tools
-Script Version: v1.2
+Script Version: v1.3
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  12.03.26
-Update Date:    14.03.26
+Update Date:    16.03.26
 
 License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
 
@@ -48,6 +48,10 @@ To install:
 
 Updates:
 
+    v1.3 16.03.26
+        - CSV import/export support.
+        - PyFlame config now working.
+
     v1.2 14.03.26
         - Added ability to rename files on the filesystem to internal/external name.
 
@@ -71,6 +75,8 @@ import os
 import sys
 import flame
 import shutil
+import csv
+import time
 from lib.qt_metadata import QuickTimeFile
 from lib.pyflame_lib_tag_tools import *
 
@@ -79,7 +85,7 @@ from lib.pyflame_lib_tag_tools import *
 # ==============================================================================
 
 SCRIPT_NAME    = 'Tag Tools'
-SCRIPT_VERSION = 'v1.2'
+SCRIPT_VERSION = 'v1.3'
 SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -96,8 +102,28 @@ def string_to_list(meta_string):
     meta_list = meta_string.split("+")
     return meta_list
 
+def load_config():
+    """
+    Load Config
+    ===========
+
+    Loads configuration values from the config file and applies them to `self.settings`.
+
+    If the config file does not exist, it creates the file using the default values
+    from the `config_values` dictionary. Otherwise, it loads the existing config values
+    and applies them to `self.settings`.
+    """
+
+    settings = PyFlameConfig(
+        config_values={
+            'export_path': '/',
+            'csv_path': '/',
+            },
+        )
+    return settings
+
 # ==============================================================================
-# [Flame Function]
+# [Flame Functions]
 # ==============================================================================
 
 # Primary function to set tag names. This is versitale and can be used for anything.
@@ -110,14 +136,14 @@ def set_tag(sequence, tag_name, value):
     # Get existing tags
     tags = sequence.tags.get_value()
 
-    print(f"[ Tagging Tools ] Sequence:      {sequence.name.get_value()}")
-    print(f"[ Tagging Tools ] Current tags:  {tags}")
+    print(f"[ Tag Tools ] Sequence:      {sequence.name.get_value()}")
+    print(f"[ Tag Tools ] Current tags:  {tags}")
 
     # Look for existing tags that match our tag name.
     # Remove it if found.
     for item in tags[:]: 
         if item.startswith(f"{tag_name}:"):
-            print(f"[ Tagging Tools ] Existing tag:  {item}")
+            print(f"[ Tag Tools ] Existing tag:  {item}")
             tags.remove(item)
 
     # Set name tag. The name type and name are seperated
@@ -129,7 +155,7 @@ def set_tag(sequence, tag_name, value):
 
     # Set tag
     sequence.tags = tags
-    print(f"[ Tagging Tools ] Updated tags:  {sequence.tags}")
+    print(f"[ Tag Tools ] Updated tags:  {sequence.tags}")
 
 
 # Set sequence name tags for both internal & client
@@ -166,7 +192,9 @@ def rename_sequence(sequence, tag_name):
         print(f"Error: The tag {tag_name} doesn't exist in this sequence: {sequence.name.get_value()}")
 
 
-# Functions to guide the real work
+# ==============================================================================
+# [Functions Called Via UI Actions]
+# ==============================================================================
 def set_internal_name(selection):
     for item in selection:
         set_name_tag_to_current(item, "internal_name")
@@ -200,8 +228,7 @@ def set_internal_and_client_name(selection):
             # Set client
             set_tag(item, "client_name", client)
         else:
-            print(f"[ Tagging Tools ] Error: The seuqnece {name} is missing __ seperating the internal and client names.")
-
+            print(f"[ Tag Tools ] Error: The seuqnece {name} is missing __ seperating the internal and client names.")
 
 def set_audio(selection):
     for item in selection:
@@ -219,7 +246,7 @@ def set_audio(selection):
                                     # Get the basename, the whole path would be too long
                                     audio_file = os.path.basename(audio.file_path)
                                     audio_list.append(audio_file)
-                                    print(f"[ Tagging Tools ] Found audio file:  {audio_file}")
+                                    print(f"[ Tag Tools ] Found audio file:  {audio_file}")
 
 
             # Sort the list to remove duplicates
@@ -232,7 +259,7 @@ def set_audio(selection):
             set_tag(item, "audio_files", audio_files)
 
         else:
-            print(f"[ Tagging Tools ] The seuqnece {item.name.get_value()} has no audio files.")
+            print(f"[ Tag Tools ] The seuqnece {item.name.get_value()} has no audio files.")
 
 def get_tags_from_qt(selection):
     for clip in selection:
@@ -243,7 +270,7 @@ def get_tags_from_qt(selection):
         metadata = qt.get_metadata("com.apple.quicktime.comment")
 
         if metadata == '':
-            print(f"[ Tagging Tools ] Error: The file {path} has no metadata.")
+            print(f"[ Tag Tools ] Error: The file {path} has no metadata.")
         else:
 
             # Convert the string to a list and set as the tag
@@ -257,7 +284,6 @@ def get_tags_from_qt(selection):
                 value = item.split(":")[1]
 
                 set_tag(clip, tag_name, value)
-
 
 def set_tags_post_export(full_path, tags):
     #print(f"Set Tags Post : Full path: {full_path}")
@@ -421,14 +447,31 @@ class tag_tools_export:
         # Make selection available to the other functions
         self.selection = selection
 
-        # Get env variable until we get config working
-        if os.environ.get("TAG_TOOLS_PATH"):
-            self.previous_path = os.environ.get("TAG_TOOLS_PATH")
-        else:
-            self.previous_path = ''
+        # Create/Load config file settings.
+        self.load_config()
+        self.previous_path = self.settings.export_path
 
         # Open main window
         self.main_window()
+
+    def load_config(self) -> None:
+        """
+        Load Config
+        ===========
+
+        Loads configuration values from the config file and applies them to `self.settings`.
+
+        If the config file does not exist, it creates the file using the default values
+        from the `config_values` dictionary. Otherwise, it loads the existing config values
+        and applies them to `self.settings`.
+        """
+
+        self.settings = PyFlameConfig(
+            config_values={
+                'export_path': '/',
+                'csv_path': '/',
+                },
+            )
 
 
     def main_window(self) -> None:
@@ -461,16 +504,18 @@ class tag_tools_export:
             print(f"Destination: {destination_path}")
             print(f"Preset path: {preset_path}")
 
-
-            # Set env variable for now until we get config working
-            os.environ["TAG_TOOLS_PATH"] = destination_path
+            self.settings.save_config(
+                config_values={
+                    'export_path': destination_path,
+                    }
+                )
 
             # Define exporter
             exporter = flame.PyExporter()
             exporter.foreground = foreground
             
             for item in self.selection:
-                print(f"[ Tagging Tools ] Exporting: {item.name.get_value()}")
+                print(f"[ Tag Tools ] Exporting: {item.name.get_value()}")
 
                 # Create an empty tags
                 tags = []
@@ -584,9 +629,9 @@ def fs_dump_metadata_to_terminal(selection):
         if metadata:
             # Convert the string to a list and set as the tag
             meta_list = string_to_list(metadata)
-            print(f"[ Tagging Tools ] Metadata dump for {basename} -> {meta_list}")
+            print(f"[ Tag Tools ] Metadata dump for {basename} -> {meta_list}")
         else:
-            print(f"[ Tagging Tools ] Metadata dump for {basename} -> None")
+            print(f"[ Tag Tools ] Metadata dump for {basename} -> None")
 
 
 def fs_rename_qt(file, tag_name):
@@ -611,16 +656,16 @@ def fs_rename_qt(file, tag_name):
 
                 try:
                     shutil.move(file, new_name_path)
-                    print (f"[ Tagging Tools ] Renamed {basename} to {new_name}")
+                    print (f"[ Tag Tools ] Renamed {basename} to {new_name}")
 
                 except Exception as e:
                     print (f"Error renaming file: {e}")
         # Didn't fine the tag, say it doesn't exist.
         if not found_tag:
-            print (f"[ Tagging Tools ] Error {basename} doesn't have {tag_name} tag set")
+            print (f"[ Tag Tools ] Error {basename} doesn't have {tag_name} tag set")
     
     else:
-        print (f"[ Tagging Tools ] Error {basename} doesn't have any metadata")
+        print (f"[ Tag Tools ] Error {basename} doesn't have any metadata")
 
     # Refresh the media panel at the end of everything
     flame.execute_shortcut('Refresh the MediaHub\'s Folders and Files')
@@ -634,7 +679,126 @@ def fs_rename_to_internal(selection):
     for item in selection:
         fs_rename_qt(item.path, "internal_name")
 
+# ==============================================================================
+# [CSV Funections]
+# ==============================================================================
+def export_csv(selection):
 
+    settings = load_config()
+    previous_csv_path = settings.csv_path
+
+    # Get export location
+    dlg = QtWidgets.QFileDialog()
+    
+    # This should be the taken from the config file once that is working.
+    #init_dir = base_path
+    dlg.setDirectory(previous_csv_path)
+    dlg.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
+    dlg.setOption(QtWidgets.QFileDialog.ShowDirsOnly, True)
+    dlg.setFileMode(QtWidgets.QFileDialog.Directory)
+    selected_dirs = []
+    if dlg.exec():
+        selected_dirs = dlg.selectedFiles()
+
+    for selected_dir in selected_dirs:
+        csv_dir = selected_dir
+
+    # Get timestamp & set name/path of csv file
+    t = time.time()
+    timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime(t))
+    file_name = "tag_tools_" + timestamp + ".csv"
+    csv_path = os.path.join(csv_dir, file_name)
+
+    # Dump the current name of the selected sequences into the CSV file
+    # Pretty simple approach. Might be worth making it more complicated
+    # and checking against set tags, etc.
+    with open(csv_path, 'w', newline='') as csvfile:
+        fieldnames = ['internal_name', 'client_name']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        # Iterate over our sequences
+        for item in selection:
+            writer.writerow({'internal_name': item.name.get_value(), 'client_name': ''})
+
+    print(f"[ Tag Tools ] CSV exported to: {csv_path}")
+
+    # Let's give the user a pretty info message
+    dialog = flame.messages.show_in_dialog(
+        title ="CSV Exported",
+        message = f"CSV exported to {csv_path}.",
+        type = "info",
+        buttons = ["Close"])
+
+    settings.save_config(
+        config_values={
+            'csv_path': csv_dir,
+            }
+        )
+
+def import_csv(selection):
+
+    settings = load_config()
+    previous_csv_path = settings.csv_path
+
+    # Get export location
+    dlg = QtWidgets.QFileDialog()
+    
+    # This should be the taken from the config file once that is working.
+    #init_dir = base_path
+    dlg.setDirectory(previous_csv_path)
+    dlg.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
+    dlg.setOption(QtWidgets.QFileDialog.ShowDirsOnly, False)
+    dlg.setNameFilter("CSV (*.csv)");
+    dlg.setDefaultSuffix("csv");
+    selected_files = []
+    if dlg.exec():
+        selected_files = dlg.selectedFiles()
+
+    for selected_file in selected_files:
+        csv_file = selected_file
+
+    if csv_file:
+
+        failed = []
+
+        # Load the CSV file and map it to a dict.
+        csv_mapping = load_csv(csv_file)
+
+        # Try to match the current name to internal_name & set client name
+        for item in selection:
+            key = item.name.get_value()
+            client_name = csv_mapping.get(key)
+
+            if client_name is None:
+                failed.append(key)
+            else:
+                set_tag(item, "client_name", client_name)
+
+        if failed:
+            print("[ Tag Tools ] The following sequnces couldn't be matched to a client name:")
+            for item in failed:
+                print(f"              - {item}")
+
+        # Let's give the user a pretty info message
+        dialog = flame.messages.show_in_dialog(
+            title ="CSV Import Fail",
+            message = f"Some sequences couldn't be matched to a client name. See the terminal for more details.",
+            type = "info",
+            buttons = ["Close"])
+
+
+    else:
+        print(f"[ Tag Tools ] Error: No CSV file selected")
+
+def load_csv(file_path: str) -> dict[str, str]:
+    """Load CSV into memory as a dict mapping internatl_name -> client_name."""
+    mapping = {}
+    with open(file_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            mapping[row["internatl_name"]] = row["client_name"]
+    return mapping
 
 
 
@@ -735,6 +899,29 @@ def get_media_panel_custom_ui_actions():
                     "isVisable": sequence_selected,
                     "isEnabled": sequence_selected,
                     "execute": rename_to_client_name,
+                    "minimumVersion": "2025.1"
+                }
+           ]
+        },
+        {
+            "name": "CSV Import/Export",
+            "hierarchy": ["Tagging Tools"],
+            "order": 2,
+            "actions": [
+                {
+                    "name": "Import",
+                    "order": 1,
+                    "isVisable": sequence_selected,
+                    "isEnabled": sequence_selected,
+                    "execute": import_csv,
+                    "minimumVersion": "2025.1"
+                },
+                {
+                    "name": "Export",
+                    "order": 2,
+                    "isVisable": sequence_selected,
+                    "isEnabled": sequence_selected,
+                    "execute": export_csv,
                     "minimumVersion": "2025.1"
                 }
            ]
