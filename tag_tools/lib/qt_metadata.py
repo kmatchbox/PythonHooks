@@ -424,6 +424,30 @@ def build_ilst_bytes(keys: List[Tuple[bytes, bytes]],
     return struct.pack(">I4s", 8 + len(entries), b"ilst") + entries
 
 
+def build_hdlr_atom() -> bytes:
+    """
+    Build an hdlr atom declaring handler_type='mdta' (Apple QuickTime metadata).
+
+    Required as the first child of meta by ISO 14496-12 and enforced by
+    macOS 26+ / QuickTime Player.  Structure (33 bytes):
+      4  version+flags (0)
+      4  pre_defined   (0)
+      4  handler_type  ('mdta')
+      12 reserved      (0)
+      1  name          ('\x00'  — empty null-terminated string)
+    """
+    payload = (
+        b"\x00\x00\x00\x00"   # version + flags
+        b"\x00\x00\x00\x00"   # pre_defined
+        b"mdta"                   # handler_type
+        b"\x00\x00\x00\x00"   # reserved[0]
+        b"\x00\x00\x00\x00"   # reserved[1]
+        b"\x00\x00\x00\x00"   # reserved[2]
+        b"\x00"                  # name (empty, null-terminated)
+    )
+    return struct.pack(">I4s", 8 + len(payload), b"hdlr") + payload
+
+
 # ---------------------------------------------------------------------------
 # Size measurement
 # ---------------------------------------------------------------------------
@@ -545,7 +569,9 @@ class QuickTimeFile:
         if udta is None or not isinstance(udta, ContainerAtom):
             udta = ContainerAtom(0, 8, b"udta", 8, [])
             moov.children.append(udta)
-        meta = MetaAtom(0, 8, b"meta", 8, b"\x00\x00\x00\x00", [])
+        hdlr_bytes = build_hdlr_atom()
+        hdlr_atom  = Atom(0, len(hdlr_bytes), b"hdlr", 8, hdlr_bytes[8:])
+        meta = MetaAtom(0, 8, b"meta", 8, b"\x00\x00\x00\x00", [hdlr_atom])
         udta.children.append(meta)
         return meta
 
@@ -573,10 +599,19 @@ class QuickTimeFile:
         new_ilst_children = parse_ilst_children(new_ilst_bytes[8:])
         new_ilst_atom     = ContainerAtom(0, len(new_ilst_bytes), b"ilst", 8,
                                           new_ilst_children)
-        meta.children = [c for c in meta.children
-                         if c.atom_type not in (b"keys", b"ilst")]
-        meta.children.append(new_keys_atom)
-        meta.children.append(new_ilst_atom)
+
+        # Preserve the hdlr child (required first child of meta per ISO 14496-12).
+        # If none exists yet, create one — this fixes files that were written
+        # without hdlr (accepted by macOS ≤15 but rejected by macOS 26+).
+        hdlr = next((c for c in meta.children if c.atom_type == b"hdlr"), None)
+        if hdlr is None:
+            hdlr_bytes = build_hdlr_atom()
+            hdlr = Atom(0, len(hdlr_bytes), b"hdlr", 8, hdlr_bytes[8:])
+
+        # Rebuild children: hdlr first, then keys, then ilst, drop old copies.
+        other = [c for c in meta.children
+                 if c.atom_type not in (b"hdlr", b"keys", b"ilst")]
+        meta.children = [hdlr] + other + [new_keys_atom, new_ilst_atom]
 
     # ------------------------------------------------------------------
     # Public read API
