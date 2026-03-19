@@ -225,16 +225,29 @@ class ContainerAtom(Atom):
 
 
 class MetaAtom(ContainerAtom):
-    """meta atom: 4-byte version/flags prefix before children."""
+    """
+    The meta atom exists in two forms:
+      - FullBox (MP4 / ISO 14496-12): has a 4-byte version+flags prefix before children.
+      - Plain Box (QuickTime MOV): no prefix, children start immediately after the header.
 
-    def __init__(self, offset, size, atom_type, header_size, version_flags, children):
+    We detect which form is present at parse time and preserve it exactly on write.
+    Writing the wrong form shifts all child offsets by 4 bytes, corrupting the file.
+    """
+
+    def __init__(self, offset, size, atom_type, header_size, version_flags, children,
+                 has_fullbox: bool = True):
         super().__init__(offset, size, atom_type, header_size, children)
-        self.version_flags: bytes = version_flags
+        self.version_flags: bytes = version_flags  # only meaningful when has_fullbox=True
+        self.has_fullbox: bool = has_fullbox
 
     def serialize(self) -> bytes:
         child_bytes = b"".join(c.serialize() for c in self.children)
-        total = 8 + 4 + len(child_bytes)
-        return struct.pack(">I4s", total, self.atom_type) + self.version_flags + child_bytes
+        if self.has_fullbox:
+            total = 8 + 4 + len(child_bytes)
+            return struct.pack(">I4s", total, self.atom_type) + self.version_flags + child_bytes
+        else:
+            total = 8 + len(child_bytes)
+            return struct.pack(">I4s", total, self.atom_type) + child_bytes
 
     def write_to(self, out_stream) -> None:
         out_stream.write(self.serialize())
@@ -257,9 +270,112 @@ def read_atom(stream, offset: int, size: int, atom_type: bytes,
     if atom_type == b"meta":
         stream.seek(payload_offset)
         raw_vf = stream.read(4)
-        vf = raw_vf if len(raw_vf) == 4 else b"\x00\x00\x00\x00"
-        children = _read_children(stream, payload_offset + 4, offset + size, src_path)
-        return MetaAtom(offset, size, atom_type, header_size, vf, children)
+        if len(raw_vf) < 4:
+            raw_vf = b"\x00\x00\x00\x00"
+
+        # Determine whether this is a FullBox (version+flags prefix) or a plain Box.
+        #
+        # A FullBox meta has version=0 and flags that are either 0x000000 or small
+        # known values.  The first byte is the version (must be 0 or 1 for any known
+        # FullBox); the next three bytes are flags.
+        #
+        # A plain-box meta (QuickTime MOV) has NO prefix — the first 4 bytes are
+        # the start of the first child atom's size field, which is always >= 8.
+        #
+        # Heuristic: if the first byte is 0 or 1 AND the 4-byte value is <= 0x01FFFFFF
+        # (a plausible version+flags), treat as FullBox.  Otherwise treat as plain Box.
+        # In practice: FullBox always starts with \x00 (version=0); plain Box starts
+        # with the high byte of a child atom size, which for any real child is also
+        # likely \x00 for small atoms but the *combined* 4-byte value would be a
+        # child size (>= 8 and usually >> 1).  The most reliable signal is: if the
+        # 4-byte value interpreted as a size lands exactly on a valid child atom
+        # boundary, it's a plain Box; otherwise it's a FullBox version+flags.
+        #
+        # Simplest reliable rule used by ffmpeg and mp4v2:
+        #   version byte (raw_vf[0]) must be 0 or 1 for a valid FullBox.
+        #   If raw_vf[0] == 0 and raw_vf[1:4] are plausible flags, assume FullBox.
+        #   But QuickTime plain-box meta ALSO starts with \x00 (high byte of child size).
+        #
+        # The definitive test: peek at what would be the first child if we skip 4 bytes
+        # (FullBox path) vs 0 bytes (plain Box path), and see which parses cleanly.
+        #
+        # Practical shortcut that matches all known real-world files:
+        #   - If ftyp brand is 'qt  ' (QuickTime MOV), meta is a PLAIN BOX.
+        #   - Otherwise (MP4/ISO), meta is a FULLBOX.
+        #
+        # We pass src_path and detect format from the already-parsed atoms above us,
+        # but we don't have that context here.  Instead use the child-size probe:
+        # read the 4 bytes that would be the first child size under plain-box assumption.
+        # If that value is >= 8 and <= payload_size, the plain-box parse is plausible.
+        # If raw_vf interpreted as version+flags has version > 1, it must be plain-box.
+
+        # Detect FullBox vs plain Box using the minimum-child-size rule:
+        #
+        # A valid atom size is always >= 8 (4-byte size + 4-byte type).
+        # If the first 4 bytes of the meta payload, interpreted as a uint32,
+        # are < 8, they cannot be a child atom size — so they must be a
+        # FullBox version+flags field.
+        #
+        # If the value is >= 8, it could be a child atom size (plain Box) or
+        # a very unusual flags value (extremely unlikely in practice).  We
+        # peek at what the first child looks like under both interpretations
+        # and choose the one whose child type is a known meta child atom.
+        #
+        # This correctly handles:
+        #   FullBox flags=0x000000  → first 4 bytes = 0x00000000 < 8 → FullBox ✓
+        #   Plain-box ProRes MOV   → first 4 bytes = 0x00000021 = 33 ≥ 8 → peek → plain ✓
+        #   FullBox flags=0x000001 → first 4 bytes = 0x00000001 < 8 → FullBox ✓
+
+        possible_child_size = struct.unpack(">I", raw_vf)[0]
+
+        if possible_child_size < 8:
+            # Cannot be a child atom size — must be FullBox version+flags.
+            is_fullbox = True
+        elif possible_child_size > payload_size:
+            # Too large to be a child within this meta — must be FullBox.
+            is_fullbox = True
+        else:
+            # Ambiguous: peek at both interpretations and pick the one with
+            # a known child atom type.
+            known_meta_children = {b"hdlr", b"keys", b"ilst", b"free",
+                                   b"iloc", b"iinf", b"ipro", b"iref",
+                                   b"idat", b"pitm", b"dinf", b"xml "}
+            # Plain-box: first child starts at payload_offset (raw_vf is child[0:4])
+            plain_child_type = raw_vf  # would be type if size were the prev 4 bytes... 
+            # Actually for plain-box: raw_vf IS the size of the first child.
+            # The type follows immediately — peek at payload_offset+4:
+            stream.seek(payload_offset + 4)
+            plain_type_peek = stream.read(4)
+            plain_ok = (plain_type_peek in known_meta_children
+                        and 8 <= possible_child_size <= payload_size)
+
+            # FullBox: first child starts at payload_offset+4
+            stream.seek(payload_offset + 4)
+            fb_peek = stream.read(8)
+            if len(fb_peek) >= 8:
+                fb_child_size = struct.unpack(">I", fb_peek[:4])[0]
+                fb_child_type = fb_peek[4:8]
+                fb_ok = (fb_child_type in known_meta_children
+                         and 8 <= fb_child_size <= payload_size - 4)
+            else:
+                fb_ok = False
+
+            if plain_ok and not fb_ok:
+                is_fullbox = False
+            elif fb_ok and not plain_ok:
+                is_fullbox = True
+            else:
+                # Both or neither plausible — default to FullBox (ISO standard)
+                is_fullbox = True
+
+        if is_fullbox:
+            children = _read_children(stream, payload_offset + 4, offset + size, src_path)
+            return MetaAtom(offset, size, atom_type, header_size, raw_vf, children,
+                            has_fullbox=True)
+        else:
+            children = _read_children(stream, payload_offset, offset + size, src_path)
+            return MetaAtom(offset, size, atom_type, header_size, b"\x00\x00\x00\x00",
+                            children, has_fullbox=False)
 
     if atom_type in CONTAINER_ATOMS:
         children = _read_children(stream, payload_offset, offset + size, src_path)
@@ -454,7 +570,8 @@ def build_hdlr_atom() -> bytes:
 
 def _measure(atom: Atom) -> int:
     if isinstance(atom, MetaAtom):
-        return 8 + 4 + sum(_measure(c) for c in atom.children)
+        prefix = 4 if atom.has_fullbox else 0
+        return 8 + prefix + sum(_measure(c) for c in atom.children)
     if isinstance(atom, ContainerAtom):
         return 8 + sum(_measure(c) for c in atom.children)
     if isinstance(atom, PassthroughAtom):
@@ -548,30 +665,66 @@ class QuickTimeFile:
                 return a
         return None
 
+    @staticmethod
+    def _meta_handler_type(meta: MetaAtom) -> bytes:
+        """Return the 4-byte handler_type from the hdlr child of meta, or b'' if absent."""
+        for c in meta.children:
+            if c.atom_type == b"hdlr" and len(c.payload) >= 12:
+                return c.payload[8:12]   # version(4) + pre_defined(4) + handler_type(4)
+        return b""
+
     def _find_meta(self, moov: ContainerAtom) -> Optional[MetaAtom]:
-        # moov → udta → meta  (standard)
+        """
+        Find the meta atom that owns QuickTime metadata keys (handler_type=mdta).
+
+        Search order:
+          1. moov → udta → meta  with hdlr handler_type == mdta  (MOV standard)
+          2. moov → udta → meta  with no hdlr yet  (file written without hdlr)
+          3. moov → meta         with hdlr handler_type == mdta  (some MP4 encoders)
+          4. moov → meta         with no hdlr yet
+
+        A meta whose hdlr declares a *different* handler (e.g. mdir, mhlr) is
+        intentionally skipped — touching it would corrupt iTunes/ID3 metadata.
+        """
+        candidates = []
+
         udta = moov.find_first(b"udta")
         if udta and isinstance(udta, ContainerAtom):
             for c in udta.children:
                 if c.atom_type == b"meta" and isinstance(c, MetaAtom):
-                    return c
-        # moov → meta  (some MP4 encoders)
+                    candidates.append(c)
+
         for c in moov.children:
             if c.atom_type == b"meta" and isinstance(c, MetaAtom):
-                return c
+                candidates.append(c)
+
+        # Prefer a meta explicitly declaring mdta handling.
+        for m in candidates:
+            if self._meta_handler_type(m) == b"mdta":
+                return m
+        # Fall back to a meta with no hdlr yet (we will add one).
+        for m in candidates:
+            if self._meta_handler_type(m) == b"":
+                return m
+        # All existing meta atoms have a foreign handler — don't touch them.
         return None
 
     def _ensure_meta(self, moov: ContainerAtom) -> MetaAtom:
         meta = self._find_meta(moov)
         if meta is not None:
             return meta
+        # Create a fresh meta under udta (always preferred location for QT keys).
         udta = moov.find_first(b"udta")
         if udta is None or not isinstance(udta, ContainerAtom):
             udta = ContainerAtom(0, 8, b"udta", 8, [])
             moov.children.append(udta)
         hdlr_bytes = build_hdlr_atom()
         hdlr_atom  = Atom(0, len(hdlr_bytes), b"hdlr", 8, hdlr_bytes[8:])
-        meta = MetaAtom(0, 8, b"meta", 8, b"\x00\x00\x00\x00", [hdlr_atom])
+        # QuickTime MOV files use a plain-box meta (no version+flags prefix).
+        # MP4/ISO files use a FullBox meta (version+flags required).
+        is_fullbox = (self.format != "mov")
+        meta = MetaAtom(0, 8, b"meta", 8, b"\x00\x00\x00\x00", [hdlr_atom],
+                        has_fullbox=is_fullbox)
         udta.children.append(meta)
         return meta
 
@@ -600,15 +753,16 @@ class QuickTimeFile:
         new_ilst_atom     = ContainerAtom(0, len(new_ilst_bytes), b"ilst", 8,
                                           new_ilst_children)
 
-        # Preserve the hdlr child (required first child of meta per ISO 14496-12).
-        # If none exists yet, create one — this fixes files that were written
-        # without hdlr (accepted by macOS ≤15 but rejected by macOS 26+).
+        # Ensure hdlr (required first child of meta, ISO 14496-12) is present
+        # and declares handler_type=mdta.  Preserve an existing mdta hdlr as-is;
+        # replace any other handler type with the correct mdta one, since this
+        # meta box is exclusively for QuickTime metadata keys.
         hdlr = next((c for c in meta.children if c.atom_type == b"hdlr"), None)
-        if hdlr is None:
+        if hdlr is None or self._meta_handler_type(meta) != b"mdta":
             hdlr_bytes = build_hdlr_atom()
             hdlr = Atom(0, len(hdlr_bytes), b"hdlr", 8, hdlr_bytes[8:])
 
-        # Rebuild children: hdlr first, then keys, then ilst, drop old copies.
+        # Rebuild children: hdlr first, then any unrelated children, then keys+ilst.
         other = [c for c in meta.children
                  if c.atom_type not in (b"hdlr", b"keys", b"ilst")]
         meta.children = [hdlr] + other + [new_keys_atom, new_ilst_atom]

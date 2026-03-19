@@ -19,11 +19,11 @@
 
 """
 Script Name:    Tag Tools
-Script Version: v1.3
+Script Version: v1.4
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  12.03.26
-Update Date:    16.03.26
+Update Date:    19.03.26
 
 License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
 
@@ -47,6 +47,10 @@ To install:
     Copy script into /opt/Autodesk/shared/python/tag_tools
 
 Updates:
+
+    v1.4 19.03.26
+        - Updated qt_metadata library to be more strict. Files were failing to open on MacOS 26
+          within QuickTime player & Preview.
 
     v1.3 16.03.26
         - CSV import/export support.
@@ -85,7 +89,7 @@ from lib.pyflame_lib_tag_tools import *
 # ==============================================================================
 
 SCRIPT_NAME    = 'Tag Tools'
-SCRIPT_VERSION = 'v1.3'
+SCRIPT_VERSION = 'v1.4'
 SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
 
 
