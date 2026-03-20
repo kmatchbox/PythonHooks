@@ -19,7 +19,7 @@
 
 """
 Script Name:    Tag Tools
-Script Version: v1.4
+Script Version: v1.4.1
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  12.03.26
@@ -47,6 +47,9 @@ To install:
     Copy script into /opt/Autodesk/shared/python/tag_tools
 
 Updates:
+
+    v1.4.1 20.03.26
+        - Fixed object has no attribute 'set_focus' error.
 
     v1.4 19.03.26
         - Updated qt_metadata library to be more strict. Files were failing to open on MacOS 26
@@ -89,7 +92,7 @@ from lib.pyflame_lib_tag_tools import *
 # ==============================================================================
 
 SCRIPT_NAME    = 'Tag Tools'
-SCRIPT_VERSION = 'v1.4'
+SCRIPT_VERSION = 'v1.4.1'
 SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
 
 
@@ -613,7 +616,7 @@ class tag_tools_export:
         self.window.grid_layout.addWidget(self.export_button, 4, 2)
 
 
-        self.destination_browser.set_focus()
+        #self.destination_browser.set_focus()
         # ------------------------------------------------------------------------------
         # [End Window Build]
         # ------------------------------------------------------------------------------
