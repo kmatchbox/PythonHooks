@@ -1,17 +1,19 @@
 """
 Script Name: BLG / Neat Video Workflow
-Script Version: 0.8
+Script Version: 0.9
 Flame Version: 2023
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 11.04.23
-Modified date: 22.01.26
+Modified date: 30.03.26
 
 Description:
 
     BLG and Neat Video workflows
 
 Change Log:
+
+    v0.9: Fixed base_path error.
 
     v0.8: Added Neat v5/v6 support.
 
@@ -276,10 +278,12 @@ def create_write_node(clip, shot_num, tape_name, duration, task):
     project = flame.project.current_project.name
     base_path = os.path.join("/PROJEKTS", project, "shots")
 
+
     clip_name = clip.name.get_value()
 
     write_node = flame.batch.create_node("Write File")
 
+    write_node.media_path = str(base_path)
     write_node.name = clip_name + "_dn"  
     write_node.media_path_pattern = "<shot name>/plates/full_dn/<name>."
     write_node.destination = ('Batch Reels', 'pre_renders')
