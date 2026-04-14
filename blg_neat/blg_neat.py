@@ -60,7 +60,6 @@ def blg_workflow(selection):
     import flame
     import os
 
-    #flame_version = flame.get_version()
 
     # Path the pybox as installed the Filmlight
     blg_path = "/usr/fl/blgflame/share/BLG.py"
@@ -68,6 +67,7 @@ def blg_workflow(selection):
     script_loc = os.path.abspath(os.path.dirname(__file__))
     setup = "fx_setups/tag_rec709.lut_node"
     cm_path = os.path.join(script_loc,setup)
+    version = int(flame.get_version_major())
 
 
     # Figure out where to start and place everything
@@ -124,7 +124,6 @@ def blg_workflow(selection):
     # Create render node
     render_node = create_render_node(clip.clip, clip_shot_num, clip_tape_name, clip_duration, "blg")
     render_node_object = flame.batch.get_node(render_node.get_value())
-    #render_node_object = flame.batch.get_node(str(render_node).replace("'", ""))
     render_node_object.pos_x = mux_in.pos_x + 450
     render_node_object.pos_y = mux_in.pos_y
 
@@ -199,8 +198,6 @@ def neat_workflow(selection):
         neat.pos_y = mux_in.pos_y
 
         cm = flame.batch.create_node("Colour Mgmt")
-        
-        #cm.name = "tag_16bit"
         cm.pos_x = mux_in.pos_x + 300
         cm.pos_y = mux_in.pos_y
 
