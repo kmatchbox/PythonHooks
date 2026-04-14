@@ -1,17 +1,22 @@
 """
 Script Name: BLG / Neat Video Workflow
-Script Version: 0.9
+Script Version: 1.0
 Flame Version: 2023
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 11.04.23
-Modified date: 30.03.26
+Modified date: 14.04.26
 
 Description:
 
     BLG and Neat Video workflows
 
 Change Log:
+
+    v1.0: Fixed issue due to naming the color management node for the Neat workflow
+          preventing the hook to be used multiple times within the same batch (i.e. multiple layers)
+
+          On Flame 2026+ now using the API to set the bit-depth (Neat) & tag Rec 709 (BLG)
 
     v0.9: Fixed base_path error.
 
@@ -83,15 +88,24 @@ def blg_workflow(selection):
     blg.pos_y = mux_in.pos_y
 
     cm = flame.batch.create_node("Colour Mgmt")
-    cm.name = "tag_rec709"
     cm.pos_x = mux_in.pos_x + 300
     cm.pos_y = mux_in.pos_y
 
-    # Try to load color management setup to tag as rec709
-    try:
-        cm.load_node_setup(cm_path)
-    except:
-        print ("ERROR: Can't load CM setup")
+    # If we're below 2026, load the CM node otherwise set it via the API.
+    if version < 2026:
+        # Try to load color management setup to tag as rec709
+        try:
+            cm.load_node_setup(cm_path)
+        except:
+            print ("ERROR: Can't load CM setup")
+    else:
+        cm.mode = "Tag Only"
+
+        # Percaution in case ACES 2.0 isn't being used
+        try:
+            cm.tagged_colour_space = "Rec.1886 Rec.709 - Display"
+        else:
+            print (f"Colorspace can not be found: Rec.1886 Rec.709 - Display. You must not be using ACES 2.0")
 
     # Cycle through shelf reels and see if graded renders exists. If not, create it.
     graded_shelf = False
@@ -127,6 +141,7 @@ def neat_workflow(selection):
     script_loc = os.path.abspath(os.path.dirname(__file__))
     setup = "fx_setups/tag_16bit.lut_node"
     cm_path = os.path.join(script_loc,setup)
+    version = int(flame.get_version_major())
 
     # Get the clip & figure out where to start and place everything
     clip_object = selection[0]
@@ -165,6 +180,7 @@ def neat_workflow(selection):
     # or the user is happy with poor clipositing practices.
     if keep_going:
 
+
         # Create the nodes and define their positions
         mux_in = flame.batch.create_node("Mux")
         mux_in.pos_x = pos_x + 150
@@ -183,15 +199,20 @@ def neat_workflow(selection):
         neat.pos_y = mux_in.pos_y
 
         cm = flame.batch.create_node("Colour Mgmt")
-        cm.name = "tag_16bit"
+        
+        #cm.name = "tag_16bit"
         cm.pos_x = mux_in.pos_x + 300
         cm.pos_y = mux_in.pos_y
 
-        # Try to load color management setup to tag as 16bit
-        try:
-            cm.load_node_setup(cm_path)
-        except:
-            print ("ERROR: Can't load CM setup")
+        # If we're below 2026, load the CM node otherwise set it via the API.
+        if version < 2026:
+            # Try to load color management setup to tag as 16bit
+            try:
+                cm.load_node_setup(cm_path)
+            except:
+                print ("ERROR: Can't load CM setup")
+        else:
+            cm.bit_depth = 16
 
         # Needed info for render & write nodes
         shot_name = clip.versions[0].tracks[0].segments[0].shot_name.get_value()
