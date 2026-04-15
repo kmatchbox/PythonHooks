@@ -104,7 +104,7 @@ def blg_workflow(selection):
         # Percaution in case ACES 2.0 isn't being used
         try:
             cm.tagged_colour_space = "Rec.1886 Rec.709 - Display"
-        else:
+        except:
             print (f"Colorspace can not be found: Rec.1886 Rec.709 - Display. You must not be using ACES 2.0")
 
     # Cycle through shelf reels and see if graded renders exists. If not, create it.
