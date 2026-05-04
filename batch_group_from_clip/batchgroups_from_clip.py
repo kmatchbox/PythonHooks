@@ -1,16 +1,19 @@
 """
 Script Name: Batchgroups From Clips
-Script Version: 1.6
+Script Version: 1.7
 Flame Version: 2025
 
 Creation date: 03.08.21
-Modified date: 26.01.26
+Modified date: 04.05.26
 
 Description:
 
     Creates a batchgroup from selected clips.
 
 Change Log:
+
+    v1.7: Updated to work with 2027 and the new metadata logic.
+
     v1.6: Fixed naming of render nodes. Was still using _comp_ which wouldn't work
           for the v000 workflow obviously.
     
@@ -254,6 +257,8 @@ def create_batch_group(clip, task, frame):
     except:
         clip_duration = 1
 
+    flame_ver = int(flame.get_version_major())
+
     clip_shot_num = clip.versions[0].tracks[0].segments[0].shot_name
     tape_name = clip.versions[0].tracks[0].segments[0].tape_name
     
@@ -318,9 +323,13 @@ def create_batch_group(clip, task, frame):
 
     if make_render:
         flame.batch.connect_nodes(mux_out, 'Default', render_node_object, 'Default')
+        if flame_ver >= 2027:
+                flame.batch.connect_nodes(loaded_plate_object, "Default", render_node_object, "Metadata")
 
     if make_write:
         flame.batch.connect_nodes(mux_out, 'Default', write_node_object, 'Default')
+        if flame_ver >= 2027:
+                flame.batch.connect_nodes(loaded_plate_object, "Default", write_node_object, "Metadata")
 
 
 def create_render_node(clip, shot_num, tape_name, task):
@@ -329,19 +338,26 @@ def create_render_node(clip, shot_num, tape_name, task):
 
     sequence_name = clip.name.get_value()
 
+    flame_ver = int(flame.get_version_major())
+
     # Just set everything to 16bit, makes Flame use EXR (Piz) which is way better than DPX
     bit_depth = "16-bit fp"
 
     render_node = flame.batch.create_node("Render")
 
     render_node.name = "<batch name>_v<iteration###>"
-    render_node.shot_name = str(shot_num)
-    render_node.frame_rate = clip.frame_rate
-    render_node.source_timecode = clip.start_time
-    render_node.record_timecode = clip.start_time
-    render_node.tape_name = tape_name
-    render_node.bit_depth = bit_depth
-    render_node.tags = clip.tags
+
+    # If we're on 2026 or below, explicitly set metadata otherwise 2027+ handles this automatically.
+    if flame_ver < 2027:
+        render_node.shot_name = str(shot_num)
+        render_node.frame_rate = clip.frame_rate
+        render_node.source_timecode = clip.start_time
+        render_node.record_timecode = clip.start_time
+        render_node.tape_name = tape_name
+        render_node.bit_depth = bit_depth
+        render_node.tags = clip.tags
+    else:
+        render_node.basic_metadata_input = "Use Metadata Input"
 
     # Check if we have in/out marks and they're type PyTime
     # otherwise the script will fail
@@ -356,25 +372,36 @@ def create_write_node(clip, shot_num, tape_name, task):
     import flame
     import os
 
+    flame_ver = int(flame.get_version_major())
+
     project = flame.project.current_project.name
     base_path = os.path.join("/PROJEKTS", project, "shots")
 
     write_node = flame.batch.create_node("Write File")
-
-    write_node.shot_name = str(shot_num)
-    write_node.frame_rate = clip.frame_rate
-    write_node.source_timecode = clip.start_time
-    write_node.record_timecode = clip.start_time
-    write_node.tape_name = tape_name
+    write_node.media_path = str(base_path)
+    write_node.name = "<batch name>_v<iteration###>"
+    write_node.create_clip_path = "<shot name>/comps/<batch name>"
+    write_node.media_path_pattern = "<shot name>/comps/flame/" + task + "/<version name>/<name>."
+    write_node.include_setup_path = "<shot name>/comp_scripts/flame/" + task + "/<batch iteration>"
     write_node.version_mode = "Follow Iteration"
     write_node.version_name = "v<version>"
     write_node.frame_padding = 4
     write_node.file_type = "OpenEXR"
     write_node.compress_mode = "DWAA"
     write_node.bit_depth = "16-bit fp"
-
-    write_node.add_to_workspace = True
     write_node.include_setup = True
+    write_node.add_to_workspace = True
+    write_node.destination = ('Batch Reels', 'batch_renders')
+
+    # If we're on 2026 or below, explicitly set metadata otherwise 2027+ handles this automatically.
+    if flame_ver < 2027:
+        write_node.shot_name = str(shot_num)
+        write_node.frame_rate = clip.frame_rate
+        write_node.source_timecode = clip.start_time
+        write_node.record_timecode = clip.start_time
+        write_node.tape_name = tape_name
+    else:
+        write_node.basic_metadata_input = "Use Metadata Input"
 
     # Check if we have in/out marks and they're type PyTime
     # otherwise the script will fail
@@ -382,12 +409,6 @@ def create_write_node(clip, shot_num, tape_name, task):
         write_node.in_mark = clip.in_mark
     if isinstance(clip.out_mark, flame.PyTime):
         write_node.out_mark = clip.out_mark
-
-    write_node.media_path = str(base_path)
-    write_node.name = "<batch name>_v<iteration###>"
-    write_node.create_clip_path = "<shot name>/comps/<batch name>"
-    write_node.media_path_pattern = "<shot name>/comps/flame/" + task + "/<version name>/<name>."
-    write_node.include_setup_path = "<shot name>/comp_scripts/flame/" + task + "/<batch iteration>"
 
     return write_node
 

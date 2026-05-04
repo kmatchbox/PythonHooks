@@ -1,17 +1,19 @@
 """
 Script Name: BLG / Neat Video Workflow
-Script Version: 1.0
+Script Version: 1.1
 Flame Version: 2023
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 11.04.23
-Modified date: 14.04.26
+Modified date: 04.05.26
 
 Description:
 
     BLG and Neat Video workflows
 
 Change Log:
+
+    v1.1: Updated to work with 2027 and the new metadata logic.
 
     v1.0: Fixed issue due to naming the color management node for the Neat workflow
           preventing the hook to be used multiple times within the same batch (i.e. multiple layers)
@@ -67,7 +69,7 @@ def blg_workflow(selection):
     script_loc = os.path.abspath(os.path.dirname(__file__))
     setup = "fx_setups/tag_rec709.lut_node"
     cm_path = os.path.join(script_loc,setup)
-    version = int(flame.get_version_major())
+    flame_ver = int(flame.get_version_major())
 
 
     # Figure out where to start and place everything
@@ -92,7 +94,7 @@ def blg_workflow(selection):
     cm.pos_y = mux_in.pos_y
 
     # If we're below 2026, load the CM node otherwise set it via the API.
-    if version < 2026:
+    if flame_ver < 2026:
         # Try to load color management setup to tag as rec709
         try:
             cm.load_node_setup(cm_path)
@@ -132,6 +134,8 @@ def blg_workflow(selection):
     flame.batch.connect_nodes(mux_in, "Default", blg, "Front")
     flame.batch.connect_nodes(blg, "Default", cm, "Front")
     flame.batch.connect_nodes(cm, "Default", render_node_object, "Front")
+    if flame_ver >= 2027:
+        flame.batch.connect_nodes(clip, "Default", render_node_object, "Metadata")
 
 def neat_workflow(selection):
     import flame
@@ -140,7 +144,7 @@ def neat_workflow(selection):
     script_loc = os.path.abspath(os.path.dirname(__file__))
     setup = "fx_setups/tag_16bit.lut_node"
     cm_path = os.path.join(script_loc,setup)
-    version = int(flame.get_version_major())
+    flame_ver = int(flame.get_version_major())
 
     # Get the clip & figure out where to start and place everything
     clip_object = selection[0]
@@ -202,7 +206,7 @@ def neat_workflow(selection):
         cm.pos_y = mux_in.pos_y
 
         # If we're below 2026, load the CM node otherwise set it via the API.
-        if version < 2026:
+        if flame_ver < 2026:
             # Try to load color management setup to tag as 16bit
             try:
                 cm.load_node_setup(cm_path)
@@ -242,9 +246,13 @@ def neat_workflow(selection):
 
         if make_render:
             flame.batch.connect_nodes(cm, "Default", render_node, "Front")
+            if flame_ver >= 2027:
+                flame.batch.connect_nodes(clip_object, "Default", render_node, "Metadata")
 
         if make_write:
             flame.batch.connect_nodes(cm, "Default", write_node, "Front")
+            if flame_ver >= 2027:
+                flame.batch.connect_nodes(clip_object, "Default", write_node, "Metadata")
 
 #
 # Create a render node with some known values
@@ -254,8 +262,10 @@ def create_render_node(clip, shot_num, tape_name, duration, task):
     import flame
     import os
 
+    flame_ver = int(flame.get_version_major())
+
     clip_name = clip.name.get_value()
-    #shot_num = shot_num.get_value()
+
      
     # Convert the bit-depth from what clip returns (int) so we can use it for the render node
     bit_depth = str(clip.bit_depth) + "-bit"
@@ -272,12 +282,17 @@ def create_render_node(clip, shot_num, tape_name, duration, task):
         render_node.name = clip_name + "_dn"
         render_node.destination = ('Batch Reels', 'pre_renders')
 
-    render_node.shot_name = shot_num
-    render_node.source_timecode = clip.start_time
-    render_node.record_timecode = clip.start_time
-    render_node.tape_name = tape_name
     render_node.bit_depth = bit_depth
-    render_node.range_end = flame.batch.start_frame + (duration - 1)
+
+    # If we're on 2026 or below, explicitly set metadata otherwise 2027+ handles this automatically.
+    if flame_ver < 2027:
+        render_node.shot_name = shot_num
+        render_node.source_timecode = clip.start_time
+        render_node.record_timecode = clip.start_time
+        render_node.tape_name = tape_name
+        render_node.range_end = flame.batch.start_frame + (duration - 1)
+    else:
+        render_node.basic_metadata_input = "Use Metadata Input"
     
     # Check if we have in/out marks and they're type PyTime
     # otherwise the script will fail
@@ -292,6 +307,8 @@ def create_render_node(clip, shot_num, tape_name, duration, task):
 def create_write_node(clip, shot_num, tape_name, duration, task):
     import flame
     import os
+
+    flame_ver = int(flame.get_version_major())
 
     project = flame.project.current_project.name
     base_path = os.path.join("/PROJEKTS", project, "shots")
@@ -315,12 +332,17 @@ def create_write_node(clip, shot_num, tape_name, duration, task):
     write_node.bit_depth = "16-bit fp"
     write_node.frame_padding = 4
 
-    write_node.shot_name = str(shot_num) 
-    write_node.frame_rate = clip.frame_rate
-    write_node.source_timecode = clip.start_time
-    write_node.record_timecode = clip.start_time
-    write_node.tape_name = tape_name
-    write_node.range_end = flame.batch.start_frame + (duration - 1)
+    # If we're on 2026 or below, explicitly set metadata otherwise 2027+ handles this automatically.
+    if flame_ver < 2027:
+        write_node.frame_rate = clip.frame_rate
+        write_node.source_timecode = clip.start_time
+        write_node.record_timecode = clip.start_time
+        write_node.range_end = flame.batch.start_frame + (duration - 1)    
+        write_node.shot_name = str(shot_num)
+        write_node.tape_name = tape_name
+    else:
+        write_node.basic_metadata_input = "Use Metadata Input"
+
           
     # Check if we have in/out marks and they're type PyTime
     # otherwise the script will fail
