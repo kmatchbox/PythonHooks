@@ -18,7 +18,7 @@
 #                https://www.gnu.org/licenses/gpl-3.0.en.html
 
 """
-Script Name:    Tag Tools
+Script Name:    Remove Audio & Markers
 Script Version: v1.0
 Flame Version:  2025.1
 Written by:     Kyle Obley
