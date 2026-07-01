@@ -23,6 +23,9 @@ All operations require that all the sequnces/files you want to modify are select
 ```Tagging Tools > Set/Get > Current Audio → Audio```
 - Sets an audio tag that lists every audio file used within the sequence. Currently this is only the basename and not the full path.
 
+```Tagging Tools > Set/Get >Sequences → MediaHub Files```
+- Attempts to match the name of the selected sequence(s) against the name of a .mov or .mp4. If a match is found, then it will copy the tags from the sequence into the matching quicktime. The source directory is taken from the current MediaHub file location.
+
 ```Tagging Tools > Set/Get > Get tags from QuickTime```
 - Get all metadata in `com.apple.quicktime.comment` and set them as tags. This only works for QTs that have been brought into Flame. The idea being that it will be useful when one needs to track the original name of a file back.
 
