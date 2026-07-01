@@ -19,11 +19,11 @@
 
 """
 Script Name:    Tag Tools
-Script Version: v1.4.1
+Script Version: v1.4.2
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  12.03.26
-Update Date:    19.03.26
+Update Date:    01.07.26
 
 License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
 
@@ -47,6 +47,9 @@ To install:
     Copy script into /opt/Autodesk/shared/python/tag_tools
 
 Updates:
+
+    v1.4.2 01.07.26
+        - Added export between marks option.
 
     v1.4.1 20.03.26
         - Fixed object has no attribute 'set_focus' error.
@@ -98,7 +101,7 @@ SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
 
 # ==============================================================================
 # [Helper Functions]
-# ==============================================================================-
+# ==============================================================================
 
 # List / String helper functions. Using + as the separator as it feels the best choice at the moment.
 def list_to_string(meta_list):
@@ -508,18 +511,27 @@ class tag_tools_export:
             #foreground = self.foreground_button.checked
             foreground = True
 
-            print(f"Destination: {destination_path}")
-            print(f"Preset path: {preset_path}")
+            # Between marks option
+            between_marks = self.between_marks_button.checked
 
+            # Save destination path to config
             self.settings.save_config(
                 config_values={
                     'export_path': destination_path,
                     }
                 )
 
+            print(f"Destination: {destination_path}")
+            print(f"Preset path: {preset_path}")
+
+
+
             # Define exporter
             exporter = flame.PyExporter()
             exporter.foreground = foreground
+            exporter.export_between_marks = between_marks
+            #exporter.include_subtitles = True
+            #exporter.export_subtitles_as_files = True
             
             for item in self.selection:
                 print(f"[ Tag Tools ] Exporting: {item.name.get_value()}")
@@ -530,6 +542,7 @@ class tag_tools_export:
                 # Get existing tags
                 tags = list_to_string(item.tags.get_value())
 
+                # Export sequence
                 exporter.export(item, preset_path, destination_path, hooks=HooksOverride(foreground), hooks_user_data=tags)
 
         def close_window() -> None:
@@ -593,6 +606,12 @@ class tag_tools_export:
             tooltip='',
             )
 
+        self.between_marks_button = PyFlamePushButton(
+            text='Between Marks',
+            checked=False,
+            tooltip='',
+            )
+
         # Menus
         self.preset_menu = PyFlameMenu(
             text='Select preset',
@@ -612,6 +631,7 @@ class tag_tools_export:
         self.window.grid_layout.addWidget(self.destination_label, 1, 0)
         self.window.grid_layout.addWidget(self.destination_browser, 1, 1, 1, 2)
         self.window.grid_layout.addWidget(self.foreground_button, 2, 1)
+        self.window.grid_layout.addWidget(self.between_marks_button, 2, 2)
         self.window.grid_layout.addWidget(self.cancel_button, 4, 1)
         self.window.grid_layout.addWidget(self.export_button, 4, 2)
 
