@@ -19,7 +19,7 @@
 
 """
 Script Name:    Tag Tools
-Script Version: v1.4.2
+Script Version: v1.5
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  12.03.26
@@ -47,6 +47,11 @@ To install:
     Copy script into /opt/Autodesk/shared/python/tag_tools
 
 Updates:
+
+    v1.5 01.07.26
+        - Added ability to use the selected sequences and try to match those to QTs at a choosen location.
+          If a match is found, the tags are copied from the sequence to the QT. This allows you to bypass
+          the exporter all together so long as the sequence name matches the file name exactly.
 
     v1.4.2 01.07.26
         - Added export between marks option.
@@ -220,6 +225,66 @@ def rename_to_internal_name(selection):
 def rename_to_client_name(selection):
     for item in selection:
         rename_sequence(item, "client_name")
+
+def sync_tags_to_qt(selection):
+
+    # Explain what we're looking for
+    message = "The MediaHub already needs to be at our search folder. This will attempt to match the name of the selected sequence \
+against the name of a .mov or .mp4.\n\nIf a match is found, then it will copy the tags from the sequence into the matching quicktime."   
+    dialog = flame.messages.show_in_dialog(
+        title ="Important - MediaHub Search Location",
+        message = message,
+        type = "info",
+        buttons = ["Continue"],
+        cancel_button = "Cancel")
+
+    if dialog == "Cancel":
+        print ("Cancel")
+
+    # Use the current mediahub file location and the directory source.
+    # Keeping the QT dialog just in case 
+    else:
+
+        flame.go_to('MediaHub')
+        source_dir = flame.mediahub.files.get_path()
+        print(f"[ Tag Tools ] Searching for matches in {source_dir}")
+        '''
+        dlg = QtWidgets.QFileDialog()
+        dlg.setWindowTitle("Choose Directory")
+        dlg.setOption(QtWidgets.QFileDialog.DontUseNativeDialog, True)
+        dlg.setOption(QtWidgets.QFileDialog.ShowDirsOnly, True)
+        dlg.setFileMode(QtWidgets.QFileDialog.Directory)
+        selected_dirs = []
+        if dlg.exec():
+            selected_dirs = dlg.selectedFiles()
+        for selected_dir in selected_dirs:
+            source_dir = selected_dir
+        '''
+        # Get directory listing & match only .mov & .mp4
+        extensions = ('.mov', '.mp4')
+        files = [f for f in os.listdir(source_dir) if f.lower().endswith(extensions)]
+
+        # Use a directory lookup to find a match
+        selection_map = {item.name.get_value(): item for item in selection}
+
+        for f in files:
+            base_name = os.path.splitext(f)[0]
+            match = selection_map.get(base_name)
+
+            # Found a match. Extract the tags and send to post export function.
+            if match:
+                print(f"[ Tag Tools ] Match found: {match.name.get_value()} -> {f}")
+                matched_file = os.path.join(source_dir, f)
+
+                # Create an empty tags & Get existing tags
+                tags = []
+                tags = list_to_string(match.tags.get_value())
+
+                # Send to our post export function
+                set_tags_post_export(matched_file, tags)
+
+                print(f"[ Tag Tools ] Updated {f} with the following tags: {tags}\n")
+
 
 def set_internal_and_client_name(selection):
     for item in selection:
@@ -898,8 +963,16 @@ def get_media_panel_custom_ui_actions():
                     "minimumVersion": "2025.1"
                 },
                 {
-                    "name": "Get tags from QuickTime",
+                    "name": "Sequences → MediaHub Files",
                     "order": 4,
+                    "isVisable": sequence_selected,
+                    "isEnabled": sequence_selected,
+                    "execute": sync_tags_to_qt,
+                    "minimumVersion": "2025.1"
+                },
+                {
+                    "name": "Get tags from imported QuickTime(s)",
+                    "order": 5,
                     "isVisable": qt_selected_flame,
                     "isEnabled": qt_selected_flame,
                     "execute": get_tags_from_qt,
