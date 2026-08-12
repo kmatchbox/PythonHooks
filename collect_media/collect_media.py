@@ -1,68 +1,40 @@
-"""
-Script Name: Collect Media
-Script Version: 1.0
-Flame Version: 2023
-Author: Kyle Obley (info@kyleobley.com)
+# Collect Media
+# Copyright (c) 2026 Kyle Obley
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+#
+# License:       GNU General Public License v3.0 (GPL-3.0)
+#                https://www.gnu.org/licenses/gpl-3.0.en.html
 
-Creation Date: 10.08.21
-Modification Date: 07.12.25
+"""
+Script Name:    Collect Media
+Script Version: 1.0.2
+Flame Version:  2023
+Written by:     Kyle Obley
+Creation Date:  08.10.21
+Update Date:    12.08.26
+
+License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
+
+Script Type:    Media Panel, Media Hub
 
 Description:
 
     Dump a list of every non-cached clip and segment in every sequence and batch in every folder
     out to a known location for archiving.
 
-Change Log:
-
-    v1.0: Merged Chris' 0.9.2 but changed the logic to not include a dated sub-folder for easier backups.
-
-          Re-incorperated the ability for a custom save location.
-
-    v0.9.2: Changed output location to ~/collect_media/{project_name}/{YYYYMMDD}/ for easier access
-            and to avoid permission issues. Organized by project and date for better management.
-            Fixes FileNotFoundError by automatically creating directory structure.
-
-    v0.9: Added a timestamped backup of a previoous list if found if, for whatever reason, you need to roll-back.
-
-    v0.8: Stopped using a UniqueList for all the lists and instead us set() at the end to remove duplicates due to a
-          the previous method taking significantly longer. Resulted in a 1000x speed increase. Bonkers.
-
-    v0.7: Attempting to speed up the write process for large projects.
-
-    v0.6: Fixed the handling of Red files to go up on directory to ensure we grab all the sub-files.
-
-          Added ability to specify a custom dump file location (custom_dump_location).
-
-    v0.5: Added the option to scrape cached media as well.
-
-          Added more checks during scraping to avoid NoneTypes. Not sure if it's bulletproof though.
-
-    v0.4: PySegment.source_cached added to API allowing us the ability to now get the cached
-          status of clips in segments including audio.
-
-          Set the minimum version to 2023.1
-
-          Removed Python 2.7 support as we now require 2023
-
-          Added a warning and completion dialog using the built-in message display
-
-    v0.3: Current desktop is now scrapped as well.
-
-          Adjusted the logic to how to account for the totals to reflect de-deplication
-          and give a better impression of total number of file sequences.
-
-    v0.2: Added compatability for Python 2.7
-
-          Implemented a class to create a unique list as opposed to dumping everything
-          to a list and then using sort to de-dup. Written by Clauss.
-
-          Re-worked logic of how we manage an existing list.
-
-          Added audio support. Cached status within a sequence is still an issue.
-
-    v0.1: Initial Release
-
-Important / Cavets:
+    Important / Cavets:
     - We can not see into BFX so anything in there will not be caught.
     - This will only grab the used version of a versioned clip, not every version.
     - This will only grab the latest batch iteration, not previous versions.
@@ -72,10 +44,81 @@ Important / Cavets:
       used within said image sequence. For now the safest route is to find the last frame in the sequence on disk
       and use that to populate the list.
 
-To Do:
-    - Figure out how to dig into batch iteration reels
+Menus:
 
+    Flame Main Menu -> Collect Media
 
+To install:
+
+    Copy script into /opt/Autodesk/shared/python/collect_media
+
+Updates:
+
+    v1.0.2 08.12.21
+        - Adjusted formating to adhear to Logik-Portal requirements.
+
+    v1.0.1 08.11.21
+        - Adjusted the custom_location logic and re-arranged the code so directory existance check works for both cases.
+
+    v1.0
+        - Merged Chris' 0.9.2 but changed the logic to not include a dated sub-folder for easier backups.
+
+        - Re-incorperated the ability for a custom save location.
+
+    v0.9.2
+        - Changed output location to ~/collect_media/{project_name}/{YYYYMMDD}/ for easier access
+          and to avoid permission issues. Organized by project and date for better management.
+
+        - Fixes FileNotFoundError by automatically creating directory structure.
+
+    v0.9
+        - Added a timestamped backup of a previoous list if found if, for whatever reason, you need to roll-back.
+
+    v0.8
+        -Stopped using a UniqueList for all the lists and instead us set() at the end to remove duplicates due to a
+         the previous method taking significantly longer. Resulted in a 1000x speed increase. Bonkers.
+
+    v0.7
+        - Attempting to speed up the write process for large projects.
+
+    v0.6
+        - Fixed the handling of Red files to go up on directory to ensure we grab all the sub-files.
+
+        - Added ability to specify a custom dump file location (custom_dump_location).
+
+    v0.5
+        - Added the option to scrape cached media as well.
+
+        - Added more checks during scraping to avoid NoneTypes. Not sure if it's bulletproof though.
+
+    v0.4
+        - PySegment.source_cached added to API allowing us the ability to now get the cached
+          status of clips in segments including audio.
+
+        - Set the minimum version to 2023.1
+
+        - Removed Python 2.7 support as we now require 2023
+
+        - Added a warning and completion dialog using the built-in message display
+
+    v0.3
+        - Current desktop is now scrapped as well.
+
+        - Adjusted the logic to how to account for the totals to reflect de-deplication
+          and give a better impression of total number of file sequences.
+
+    v0.2
+        - Added compatability for Python 2.7
+
+        - Implemented a class to create a unique list as opposed to dumping everything
+          to a list and then using sort to de-dup. Written by Clauss.
+
+        - Re-worked logic of how we manage an existing list.
+
+        - Added audio support. Cached status within a sequence is still an issue.
+
+    v0.1
+        - Initial Release
 """
 
 import flame
@@ -375,30 +418,31 @@ def collect_media():
     # Custom dumpfile location in case you want a shared location.
     # This will still create a sub-folder for the current_project.
     # Leave empty to use the user's home folder
-    custom_dump_location = ""
+    #custom_dump_location = ""
+    custom_dump_location = os.path.join("/PROJEKTS", current_project, "assets", "technical", "collect_media")
 
-    # Setup the dump the file and deal with locking
-    dump_file = "collected_media.txt"
 
-    if custom_dump_location:
-        dump_file_location = os.path.join(custom_dump_location, current_project, dump_file)
-        
-    # Use the default location
+    # Use custom location if set. If not, use the default, userhome location
     # Build path: ~/collect_media/{project_name}/
+    if custom_dump_location:
+        dump_dir = custom_dump_location
     else:
         home_dir = os.path.expanduser('~')
-        project_dir = os.path.join(home_dir, "collect_media", current_project)
-        dump_file_location = os.path.join(project_dir, dump_file)
-        # Ensure the directory structure exists
-        if not os.path.exists(project_dir):
-            try:
-                os.makedirs(project_dir)
-                print ("[ Collect Media ] Created directory: %s" % project_dir)
-            except OSError as e:
-                print ("\n\n[ Collect Media ] ERROR: Could not create directory %s: %s\n\n" % (project_dir, str(e)))
-                return
+        dump_dir = os.path.join(home_dir, "collect_media", current_project)
 
-    
+    # Ensure the directory structure exists
+    if not os.path.exists(dump_dir):
+        try:
+            os.makedirs(dump_dir)
+            print ("[ Collect Media ] Created directory: %s" % dump_dir)
+        except OSError as e:
+            print ("\n\n[ Collect Media ] ERROR: Could not create directory %s: %s\n\n" % (dump_dir, str(e)))
+            return
+
+    # Name & location of the dump file
+    dump_file = "collected_media.txt"
+    dump_file_location = os.path.join(dump_dir, dump_file)
+
     # Make sure someone else isn't writting to the file. If they aren't, then do our thing.
     locked_dump_file_location = dump_file_location + ".lock"
     if os.path.isfile(locked_dump_file_location):
