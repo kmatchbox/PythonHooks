@@ -19,7 +19,7 @@
 
 """
 Script Name:    ffmpeg Transcode
-Script Version: v1.0.0
+Script Version: 1.0.0
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  06.30.26
@@ -31,7 +31,9 @@ Script Type:    Media Hub
 
 Description:
 
-    Description goes here.
+    Transcodes the selected .mov files to .mp4 using specified bit-rates from both audio and video
+    when the supplied profiles don't match a delivery specification and you want to avoid the likes
+    of Media Encoder, etc.
 
 Menus:
 
@@ -137,6 +139,7 @@ class ffmpeg_transcode:
         for line in transcode.stdout:
             print(line, end="")
 
+        # Might remove this. It locks Flame out.
         transcode.wait()
 
         print(f"Return code: {transcode.returncode}")
@@ -327,12 +330,62 @@ class ffmpeg_transcode:
         # ------------------------------------------------------------------------------
 
 # ==============================================================================
+# [OP-ATOM fucntion]
+# NOT WORKING CURRENTLY
+# ==============================================================================
+def add_opatom(selection):
+    for item in selection:
+        file = item.path
+        
+        source_folder = os.path.dirname(file)
+        source_filename = os.path.splitext(os.path.basename(file))[0]
+        destination_filename = source_filename + "_temp.mxf"
+        destination_file = os.path.join(source_folder, destination_filename)
+
+        print ("-------- ffmpeg Transcode --------\n")
+        print (f"Adding OP-ATOM to {file}")
+        print ("----------------------------------\n")
+
+        # Create the subprocess
+        transcode = subprocess.Popen(
+            ["ffmpeg", "-nostdin", "-y", "-i", file, "-map", "0:v:0", "-c:v", "copy", "-an",
+             "-f", "mxf_opatom", destination_file],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,   # merge stderr into stdout, one stream to read
+            text=True,
+            bufsize=1,
+        )
+
+        for line in transcode.stdout:
+            print(line, end="")
+
+        transcode.wait()
+
+        print(f"Return code: {transcode.returncode}")
+
+        # Overwrite our source with the transcoded file.
+        #try:
+        #    os.replace(destination_file, file)
+        #except OSError as error:
+        #    print(f"Some other error occurred: {error}")
+
+
+
+# ==============================================================================
 # [Scoping]
 # ==============================================================================
 def is_mov(selection):
     import os
     for item in selection:
         if os.path.splitext(item.path)[1] == '.mov':
+            return True
+    return False
+
+def is_mxf(selection):
+    import os
+    for item in selection:
+        if os.path.splitext(item.path)[1] == '.mxf':
             return True
     return False
 

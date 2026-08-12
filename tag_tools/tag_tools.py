@@ -19,11 +19,11 @@
 
 """
 Script Name:    Tag Tools
-Script Version: v1.5
+Script Version: 1.5.1
 Flame Version:  2025.1
 Written by:     Kyle Obley
-Creation Date:  12.03.26
-Update Date:    01.07.26
+Creation Date:  03.12.26
+Update Date:    09.12.26
 
 License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
 
@@ -35,7 +35,11 @@ Description:
     of being able to track original sequence name from Flame vs client name
     as well as audio.
 
-    Very much a work in progress
+    See:
+    https://forum.logik.tv/t/python-tag-tools-internal-name-client-name-management/
+    https://github.com/kmatchbox/PythonHooks/tree/main/tag_tools
+
+    Very much a work in progress.
 
 Menus:
 
@@ -48,29 +52,32 @@ To install:
 
 Updates:
 
-    v1.5 01.07.26
+    v1.5.1 09.12.26
+        - Adjusted formating to adhear to Logik-Portal requirements.
+
+    v1.5 07.01.26
         - Added ability to use the selected sequences and try to match those to QTs at a choosen location.
           If a match is found, the tags are copied from the sequence to the QT. This allows you to bypass
           the exporter all together so long as the sequence name matches the file name exactly.
 
-    v1.4.2 01.07.26
+    v1.4.2 07.01.26
         - Added export between marks option.
 
-    v1.4.1 20.03.26
+    v1.4.1 03.20.26
         - Fixed object has no attribute 'set_focus' error.
 
-    v1.4 19.03.26
+    v1.4 03.19.26
         - Updated qt_metadata library to be more strict. Files were failing to open on MacOS 26
           within QuickTime player & Preview.
 
-    v1.3 16.03.26
+    v1.3 03.16.26
         - CSV import/export support.
         - PyFlame config now working.
 
-    v1.2 14.03.26
+    v1.2 03.14.26
         - Added ability to rename files on the filesystem to internal/external name.
 
-    v1.1 13.03.26
+    v1.1 03.13.26
         - Added ability to read/set tags from imported QT.
         - Added ability to dump the contents of selected QT fiels within the media panel
           to the terminal.
@@ -78,7 +85,7 @@ Updates:
         - Added ability to export from Flame and set the metadata afterwards. Current
           this is only working in the foreground. Need to figure out Backburner.
 
-    v1.0 12.03.26
+    v1.0 03.12.26
         - Initial release.
 """
 
@@ -100,7 +107,7 @@ from lib.pyflame_lib_tag_tools import *
 # ==============================================================================
 
 SCRIPT_NAME    = 'Tag Tools'
-SCRIPT_VERSION = 'v1.4.1'
+SCRIPT_VERSION = 'v1.5.1'
 SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
 
 
