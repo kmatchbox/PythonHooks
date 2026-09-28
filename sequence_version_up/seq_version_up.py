@@ -1,6 +1,6 @@
 """
 Script Name: Sequence Verion Up
-Script Version: 0.1
+Script Version: 1.0
 Flame Version: 2021
 Author: Kyle Obley (info@kyleobley.com)
 
@@ -13,6 +13,9 @@ Description:
     of clip_tag##_mmdd to match and be updated.
 
 Change Log:
+
+    v1.0: Removed the strip method which was not working where a version would
+          hit a number that ended in a 0.
 
     v0.1: Initial Release 
 
@@ -47,8 +50,11 @@ def version_up(selection):
                 foundTag = False
             
             # Find version and increment
-            if re.match(fr'{tag}(\d+)', item):
-                number = int(item.strip(tag)) + 1
+            match = re.match(fr'{tag}(\d+)', item)
+            if match:
+                number_str = match.group(1)
+                print(number_str)
+                number = int(number_str) + 1
                 item = tag + str(number).zfill(2)
                 foundTag = True
 
