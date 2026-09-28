@@ -1,17 +1,19 @@
 """
 Script Name: Connect Cryptomatte
-Script Version: 0.5
+Script Version: 0.6
 Flame Version: 2021
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 05.07.23
-Modified date: 26.02.24
+Modified date: 23.09.26
 
 Description:
 
     Creates and connect a Cryptomatte node to a read file node if it's a cryptomatte.
 
 Change Log:
+
+    v0.6: Added .lower() to scope to grab clips with "Crypto".
 
     v0.5: Completely changed logic to use node.output_sockets which removes the need to try channels, etc.
           This hopefully makes the script bulletproof.
@@ -69,7 +71,7 @@ def scope_crypto(selection):
     import flame
     for item in selection:
         if isinstance(item, flame.PyNode):
-            if 'crypto' in item.name.get_value():
+            if 'crypto' in item.name.get_value().lower():
                 return True
 
 
