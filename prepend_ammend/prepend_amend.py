@@ -5,13 +5,15 @@ Flame Version: 2021
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 05.07.23
-Modified date: 08.08.24
+Modified date: 02.11.26
 
 Description:
 
     Amend or prepend to a clip name
 
 Change Log:
+
+    v0.4: Fixed PySide Geometry issue in 2027.2
 
     v0.3: PySide6 code wasn't implemented correctly.
 
@@ -40,11 +42,11 @@ class prepend_amend(object):
         if QtCore.__version_info__[0] < 6:
             mainWindow = QtWidgets.QDesktopWidget()
             QAction = QtWidgets.QAction
+            resolution = mainWindow.screenGeometry()
         else:
             mainWindow = QtGui.QGuiApplication.primaryScreen()
             QAction = QtGui.QAction
-
-        resolution = mainWindow.screenGeometry()
+            resolution = mainWindow.geometry()
 
         self.window = QtWidgets.QWidget()
         self.window.setMinimumSize(QtCore.QSize(300, 150))

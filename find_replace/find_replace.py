@@ -5,7 +5,7 @@ Flame Version: 2019
 Author: Kyle Obley (info@kyleobley.com)
 
 Creation date: 04.01.21
-Modified date: 08.08.24
+Modified date: 02.11.26
 
 Description:
 
@@ -16,6 +16,8 @@ Description:
     Useful for batch renaming sequences when versioning.
 
 Change Log:
+
+    v0.5: Fixed PySide Geometry issue in 2027.2
 
     v0.4: PySide6 code wasn't implemented correctly.
 
@@ -47,11 +49,11 @@ class find_replace(object):
         if QtCore.__version_info__[0] < 6:
             mainWindow = QtWidgets.QDesktopWidget()
             QAction = QtWidgets.QAction
+            resolution = mainWindow.screenGeometry()
         else:
             mainWindow = QtGui.QGuiApplication.primaryScreen()
             QAction = QtGui.QAction
-
-        resolution = mainWindow.screenGeometry()
+            resolution = mainWindow.geometry()
 
         self.window = QtWidgets.QWidget()
         self.window.setMinimumSize(QtCore.QSize(300, 150))

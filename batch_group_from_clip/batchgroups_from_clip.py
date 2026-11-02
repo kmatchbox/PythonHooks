@@ -4,13 +4,15 @@ Script Version: 1.7
 Flame Version: 2025
 
 Creation date: 03.08.21
-Modified date: 04.05.26
+Modified date: 02.11.26
 
 Description:
 
     Creates a batchgroup from selected clips.
 
 Change Log:
+
+    v1.8: Fixed PySide Geometry issue in 2027.2
 
     v1.7: Updated to work with 2027 and the new metadata logic.
 
@@ -94,11 +96,11 @@ class batchgroup_ui(object):
         if QtCore.__version_info__[0] < 6:
             mainWindow = QtWidgets.QDesktopWidget()
             QAction = QtWidgets.QAction
+            resolution = mainWindow.screenGeometry()
         else:
             mainWindow = QtGui.QGuiApplication.primaryScreen()
             QAction = QtGui.QAction
-
-        resolution = mainWindow.screenGeometry()
+            resolution = mainWindow.geometry()
 
         # Define tasks
         self.tasks = ["comp", "cleanup", "matte", "screen", "other"]
