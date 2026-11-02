@@ -19,11 +19,11 @@
 
 """
 Script Name:    ffmpeg Transcode
-Script Version: 1.0.0
+Script Version: 1.1.0
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  06.30.26
-Update Date:    06.30.26
+Update Date:    11.02.26
 
 License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
 
@@ -45,6 +45,9 @@ To install:
 
 Updates:
 
+    v1.6 11.02.26
+        - Updated to PyFlameLib v5.5.3 - Fixes screenGeometry error with Flame 2027.2.
+
     v1.0.0 06.30.26
         - Initial release.
 """
@@ -63,7 +66,7 @@ from lib.pyflame_lib_ffmpeg_transcode import *
 # ==============================================================================
 
 SCRIPT_NAME    = 'ffmpeg Transcode'
-SCRIPT_VERSION = 'v1.0.0'
+SCRIPT_VERSION = 'v1.1.0'
 SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
 
 # ==============================================================================

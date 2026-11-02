@@ -19,11 +19,11 @@
 
 """
 Script Name:    Tag Tools
-Script Version: 1.5.1
+Script Version: 1.6.0
 Flame Version:  2025.1
 Written by:     Kyle Obley
 Creation Date:  03.12.26
-Update Date:    09.12.26
+Update Date:    11.02.26
 
 License:        GNU General Public License v3.0 (GPL-3.0) - see LICENSE file for details
 
@@ -51,6 +51,8 @@ To install:
     Copy script into /opt/Autodesk/shared/python/tag_tools
 
 Updates:
+    v1.6 11.02.26
+        - Updated to PyFlameLib v5.5.3 - Fixes screenGeometry error with Flame 2027.2.
 
     v1.5.1 09.12.26
         - Adjusted formating to adhear to Logik-Portal requirements.
@@ -107,7 +109,7 @@ from lib.pyflame_lib_tag_tools import *
 # ==============================================================================
 
 SCRIPT_NAME    = 'Tag Tools'
-SCRIPT_VERSION = 'v1.5.1'
+SCRIPT_VERSION = 'v1.6.0'
 SCRIPT_PATH    = os.path.abspath(os.path.dirname(__file__))
 
 
